@@ -134,6 +134,13 @@ function makePlayer(id, name, x, y, local = false) {
     totalSnowCollected: 0,
     weaponLevel: 1,
     nextUpgradeAt: 50,
+    pendingUpgradeChoices: [],
+    damageBonus: 0,
+    fireRateMultiplier: 1,
+    extraProjectiles: 0,
+    pickupRadius: 0,
+    damageReduction: 0,
+    maxHp: 100,
     alive: true,
     isLocal: local,
     input: {
@@ -382,6 +389,12 @@ function handleIncomingConnection(conn) {
       return;
     }
 
+    if (data.type === "upgrade" && conn.playerId) {
+      const player = world.players.find(p => p.id === conn.playerId);
+      if (player) applyUpgradeChoice(player, String(data.upgradeId || ""));
+      return;
+    }
+
     if (data.type === "leave" && conn.playerId) {
       removePlayer(conn.playerId);
       conn.playerId = null;
@@ -603,6 +616,13 @@ function makeSnapshot() {
       totalSnowCollected: p.totalSnowCollected || 0,
       weaponLevel: p.weaponLevel || 1,
       nextUpgradeAt: p.nextUpgradeAt || 50,
+      pendingUpgradeChoices: p.pendingUpgradeChoices || [],
+      damageBonus: p.damageBonus || 0,
+      fireRateMultiplier: p.fireRateMultiplier || 1,
+      extraProjectiles: p.extraProjectiles || 0,
+      pickupRadius: p.pickupRadius || 0,
+      damageReduction: p.damageReduction || 0,
+      maxHp: p.maxHp || 100,
       alive: p.alive
     })),
 
@@ -798,19 +818,95 @@ function buildFromClient(type) {
 
 function shoot(player, now) {
   const level = player.weaponLevel || 1;
-  if (now - player.lastShot < Math.max(145, 380 - (level - 1) * 38)) return;
+  const cooldown = Math.max(115, (380 - (level - 1) * 38) * (player.fireRateMultiplier || 1));
+  if (now - player.lastShot < cooldown) return;
   player.lastShot = now;
-  const base = player.angle || 0, count = level >= 5 ? 3 : level >= 3 ? 2 : 1;
+  const base = player.angle || 0, count = Math.min(6, (level >= 5 ? 3 : level >= 3 ? 2 : 1) + (player.extraProjectiles || 0));
   for (let i = 0; i < count; i++) {
-    const offset = count === 1 ? 0 : (i - (count - 1) / 2) * (count === 3 ? 0.22 : 0.12);
+    const offset = count === 1 ? 0 : (i - (count - 1) / 2) * (count >= 4 ? 0.16 : count === 3 ? 0.22 : 0.12);
     const angle = base + offset, vx = Math.cos(angle), vy = Math.sin(angle);
-    world.shots.push({x:player.x+vx*24,y:player.y+vy*24,vx:vx*(510+(level-1)*22),vy:vy*(510+(level-1)*22),owner:player.id,life:1.5,r:level>=4?8:6,damage:25+(level-1)*8});
+    world.shots.push({x:player.x+vx*24,y:player.y+vy*24,vx:vx*(510+(level-1)*22),vy:vy*(510+(level-1)*22),owner:player.id,life:1.5,r:level>=4?8:6,damage:25+(level-1)*8+(player.damageBonus||0)});
   }
 }
 
 function dropSnow(x, y, amount = 3) {
   world.snowballs.push({ x, y, amount, r: 8 });
 }
+
+const UPGRADE_POOL = [
+  { id: "power", title: "Stärkere Schneebälle", description: "+10 Schaden pro Treffer.", icon: "❄", apply: p => { p.damageBonus = (p.damageBonus || 0) + 10; } },
+  { id: "rapid", title: "Schnellfeuer", description: "Wirf Schneebälle 15 % schneller.", icon: "⚡", apply: p => { p.fireRateMultiplier = Math.max(0.45, (p.fireRateMultiplier || 1) * 0.85); } },
+  { id: "multi", title: "Mehrfachwurf", description: "Wirf pro Angriff einen zusätzlichen Schneeball.", icon: "✦", apply: p => { p.extraProjectiles = Math.min(4, (p.extraProjectiles || 0) + 1); } },
+  { id: "speed", title: "Pinguin-Sprint", description: "+25 Bewegungsgeschwindigkeit.", icon: "➤", apply: p => { p.speed = Math.min(360, (p.speed || 220) + 25); } },
+  { id: "vitality", title: "Eisiges Herz", description: "+25 maximale Lebenspunkte und heilt 25.", icon: "♥", apply: p => { p.maxHp = (p.maxHp || 100) + 25; p.hp = Math.min(p.maxHp, p.hp + 25); } },
+  { id: "armor", title: "Schneepanzer", description: "Du erleidest 12 % weniger Kontaktschaden.", icon: "⬡", apply: p => { p.damageReduction = Math.min(0.6, (p.damageReduction || 0) + 0.12); } },
+  { id: "magnet", title: "Schneemagnet", description: "Sammle Schneebälle aus größerer Entfernung ein.", icon: "◎", apply: p => { p.pickupRadius = Math.min(100, (p.pickupRadius || 0) + 22); } }
+];
+
+function makeUpgradeChoices() {
+  const pool = [...UPGRADE_POOL];
+  const choices = [];
+  while (pool.length && choices.length < 3) {
+    const index = Math.floor(Math.random() * pool.length);
+    const upgrade = pool.splice(index, 1)[0];
+    choices.push({ id: upgrade.id, title: upgrade.title, description: upgrade.description, icon: upgrade.icon });
+  }
+  return choices;
+}
+
+function chooseUpgrade(upgradeId) {
+  const player = localPlayer();
+  if (!player || !player.pendingUpgradeChoices || !player.pendingUpgradeChoices.some(choice => choice.id === upgradeId)) return;
+
+  if (online && !isHost) {
+    if (hostConnection && hostConnection.open) hostConnection.send({ type: "upgrade", upgradeId });
+    return;
+  }
+
+  applyUpgradeChoice(player, upgradeId);
+}
+
+function applyUpgradeChoice(player, upgradeId) {
+  if (!player || !Array.isArray(player.pendingUpgradeChoices)) return false;
+  const offered = player.pendingUpgradeChoices.find(choice => choice.id === upgradeId);
+  if (!offered) return false;
+  const upgrade = UPGRADE_POOL.find(item => item.id === upgradeId);
+  if (!upgrade) return false;
+  upgrade.apply(player);
+  player.pendingUpgradeChoices = [];
+  if (player.id === localId) notify("Upgrade gewählt: " + upgrade.title, 2600);
+  return true;
+}
+
+function renderUpgradeChoices(player) {
+  const overlay = document.getElementById("upgradeOverlay");
+  const choicesBox = document.getElementById("upgradeChoices");
+  if (!overlay || !choicesBox) return;
+  const choices = player && player.pendingUpgradeChoices;
+  if (!choices || !choices.length || !running) {
+    overlay.classList.add("hidden");
+    choicesBox.replaceChildren();
+    return;
+  }
+  overlay.classList.remove("hidden");
+  const key = choices.map(choice => choice.id).join("|");
+  if (choicesBox.dataset.choiceKey === key) return;
+  choicesBox.dataset.choiceKey = key;
+  choicesBox.replaceChildren();
+  for (const choice of choices) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "upgrade-choice";
+    button.innerHTML = '<span class="upgrade-icon"></span><strong></strong><span></span>';
+    button.querySelector(".upgrade-icon").textContent = choice.icon || "✦";
+    button.querySelector("strong").textContent = choice.title;
+    button.querySelector("span:last-child").textContent = choice.description;
+    button.addEventListener("click", () => chooseUpgrade(choice.id));
+    button.addEventListener("pointerdown", event => event.stopPropagation());
+    choicesBox.appendChild(button);
+  }
+}
+
 
 function spawnEnemy() {
   const alive=world.players.filter(p=>p.alive);
@@ -870,6 +966,11 @@ function updateHost(dt, now) {
   for (const player of world.players) {
     if (!player.alive) continue;
 
+    if (player.pendingUpgradeChoices && player.pendingUpgradeChoices.length) {
+      player.input = { dx: 0, dy: 0, aimX: Math.cos(player.angle || 0), aimY: Math.sin(player.angle || 0), shoot: false, wall: false, house: false };
+      continue;
+    }
+
     const input = player.isLocal
       ? getInput(player)
       : player.input;
@@ -904,15 +1005,19 @@ function updateHost(dt, now) {
       if (
         drop.amount > 0 &&
         Math.hypot(player.x - drop.x, player.y - drop.y) <
-          player.r + drop.r + 4
+          player.r + drop.r + 4 + (player.pickupRadius || 0)
       ) {
         player.snow += drop.amount;
         player.totalSnowCollected = (player.totalSnowCollected || 0) + drop.amount;
         drop.amount = 0;
-        while (player.totalSnowCollected >= (player.nextUpgradeAt || 50)) {
-          player.weaponLevel = (player.weaponLevel || 1) + 1;
-          player.nextUpgradeAt = (player.nextUpgradeAt || 50) + 50;
-          if (player.id === localId) notify("Waffen-Upgrade! Waffe jetzt Stufe " + player.weaponLevel, 3200);
+        if (!player.pendingUpgradeChoices || !player.pendingUpgradeChoices.length) {
+          while (player.totalSnowCollected >= (player.nextUpgradeAt || 50)) {
+            player.weaponLevel = (player.weaponLevel || 1) + 1;
+            player.nextUpgradeAt = (player.nextUpgradeAt || 50) + 50;
+            player.pendingUpgradeChoices = makeUpgradeChoices();
+            if (player.id === localId) notify("Wähle dein Upgrade!", 3200);
+            break;
+          }
         }
       }
     }
@@ -968,7 +1073,7 @@ function updateHost(dt, now) {
       Math.hypot(target.x - enemy.x, target.y - enemy.y) <
       enemy.r + target.r
     ) {
-      target.hp -= (enemy.damage || 24) * dt;
+      target.hp -= (enemy.damage || 24) * (1 - Math.min(0.7, target.damageReduction || 0)) * dt;
 
       if (target.hp <= 0) {
         target.hp = 0;
@@ -1358,6 +1463,7 @@ function updateUI(now) {
   playersStat.textContent = world.players.length + "/" + MAX_PLAYERS;
   enemiesStat.textContent = world.enemies.length;
   weaponStat.textContent = "Stufe " + (player ? (player.weaponLevel || 1) : 1);
+  renderUpgradeChoices(player);
 
   playerList.replaceChildren();
 
