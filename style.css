@@ -55,3 +55,32 @@ input:focus{border-color:var(--cyan)}
 @media(max-width:900px){#gamePanel{padding:8px}.topbar{gap:9px;flex-wrap:wrap;padding:10px}.game-layout{grid-template-columns:minmax(0,1fr)}.sidebar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.brand{font-size:13px}.stats{gap:12px}.stat strong{font-size:14px}}
 @media(max-width:600px){.screen{padding:12px}.menu-card{border-radius:18px}.topbar{margin-bottom:8px}.stats{order:3;width:100%;justify-content:space-between}.pause-button{margin-left:auto}.game-layout{gap:8px}.sidebar{grid-template-columns:1fr 1fr}.side-card{padding:11px}.side-card:last-child{grid-column:1/-1}.canvas-help{display:none}.mobile-controls{display:flex;position:absolute;left:10px;right:10px;bottom:12px;align-items:flex-end;justify-content:space-between;gap:10px;pointer-events:none}.joystick,.mobile-actions{pointer-events:auto}.game-message{max-width:90%;overflow:hidden;text-overflow:ellipsis;font-size:11px}.brand{font-size:12px}.sidebar .eyebrow{font-size:9px}}
 @media(max-width:380px){.sidebar{grid-template-columns:1fr}.side-card:last-child{grid-column:auto}.joystick{width:108px;height:108px}.stick{left:30px;top:30px}.shoot-button{min-width:95px}.mobile-build{padding:9px}}
+
+/* Mobile gameplay is designed for landscape orientation. */
+.rotate-prompt{display:none}
+@media (max-width:900px) and (orientation:landscape){
+  body{overflow:hidden}
+  #gamePanel{padding:4px}
+  .topbar{padding:4px 8px;margin-bottom:4px;gap:8px;flex-wrap:nowrap}
+  .brand{font-size:11px;white-space:nowrap}
+  .stats{order:0;width:auto;gap:8px;flex:1;justify-content:center}
+  .stat small{font-size:8px}.stat strong{font-size:12px}
+  .top-actions{gap:4px}.pause-button{font-size:11px;padding:7px 8px}
+  .game-layout{display:block}
+  .game-panel{height:calc(100dvh - 48px);border-radius:8px}
+  #game{width:100%;height:100%;aspect-ratio:auto;object-fit:fill}
+  .sidebar{display:none}
+  .mobile-controls{display:flex;bottom:8px;left:10px;right:10px}
+  .joystick{width:100px;height:100px}
+  .stick{left:26px;top:26px;width:44px;height:44px}
+  .shoot-button{min-width:100px;min-height:50px}
+  .mobile-build{padding:8px 10px}
+  .canvas-help{display:none}
+}
+@media (max-width:900px) and (orientation:portrait){
+  .rotate-prompt{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;background:#06121df5;text-align:center;padding:24px}
+  .rotate-prompt>div{max-width:300px}
+  .rotate-prompt span{font-size:54px;display:block;color:#66e0e8}
+  .rotate-prompt h2{font-size:24px;margin:10px 0}
+  .rotate-prompt p{color:#94adba;line-height:1.5}
+}
