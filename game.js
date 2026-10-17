@@ -26,6 +26,9 @@ const levelStat = document.getElementById("levelStat");
 const snowStat = document.getElementById("snowStat");
 const playersStat = document.getElementById("playersStat");
 const enemiesStat = document.getElementById("enemiesStat");
+const weaponStat = document.getElementById("weaponStat");
+const pauseOverlay = document.getElementById("pauseOverlay");
+const pauseBtn = document.getElementById("pauseBtn");
 
 let peer = null;
 let hostConnection = null;
@@ -35,6 +38,7 @@ let pendingConnections = new Set();
 let isHost = false;
 let online = false;
 let running = false;
+let paused = false;
 let gameOver = false;
 let roomCode = "";
 let localId = "";
@@ -105,6 +109,8 @@ function resetWorld() {
   enemyId = 1;
   lastSpawn = 0;
   gameOver = false;
+  paused = false;
+  if (pauseOverlay) pauseOverlay.classList.add("hidden");
   joinedGame = false;
   joiningSent = false;
 }
@@ -120,6 +126,9 @@ function makePlayer(id, name, x, y, local = false) {
     angle: 0,
     hp: 100,
     snow: 15,
+    totalSnowCollected: 0,
+    weaponLevel: 1,
+    nextUpgradeAt: 50,
     alive: true,
     isLocal: local,
     input: {
@@ -175,6 +184,8 @@ function closeNetwork() {
 
 function returnToMenu() {
   running = false;
+  paused = false;
+  if (pauseOverlay) pauseOverlay.classList.add("hidden");
   closeNetwork();
   gamePanel.classList.add("hidden");
   menu.classList.remove("hidden");
@@ -184,6 +195,8 @@ function startGame() {
   if (running) return;
 
   running = true;
+  paused = false;
+  if (pauseOverlay) pauseOverlay.classList.add("hidden");
   joinedGame = true;
 
   menu.classList.add("hidden");
@@ -513,7 +526,7 @@ async function joinOnlineRoom() {
       }
 
       if (data.type === "snapshot") {
-        applySnapshot(data.world);
+        if (!paused) applySnapshot(data.world);
       }
     });
 
@@ -580,6 +593,9 @@ function makeSnapshot() {
       angle: p.angle,
       hp: p.hp,
       snow: p.snow,
+      totalSnowCollected: p.totalSnowCollected || 0,
+      weaponLevel: p.weaponLevel || 1,
+      nextUpgradeAt: p.nextUpgradeAt || 50,
       alive: p.alive
     })),
 
@@ -657,16 +673,10 @@ function getInput(player) {
     dy /= length;
   }
 
-  let aimX = mouse.x + camera.x - player.x;
-  let aimY = mouse.y + camera.y - player.y;
-  const aimLength = Math.hypot(aimX, aimY);
-
-  if (aimLength > 0.01) {
-    aimX /= aimLength;
-    aimY /= aimLength;
-  } else {
-    aimX = Math.cos(player.angle);
-    aimY = Math.sin(player.angle);
+  let aimX = player.angle ? Math.cos(player.angle) : 1;
+  let aimY = player.angle ? Math.sin(player.angle) : 0;
+  if (Math.hypot(dx, dy) > 0.05) {
+    const len = Math.hypot(dx, dy); aimX = dx / len; aimY = dy / len;
   }
 
   return {
@@ -797,22 +807,15 @@ function buildFromClient(type) {
 }
 
 function shoot(player, now) {
-  if (now - player.lastShot < 380) return;
-
+  const level = player.weaponLevel || 1;
+  if (now - player.lastShot < Math.max(145, 380 - (level - 1) * 38)) return;
   player.lastShot = now;
-
-  const vx = Math.cos(player.angle);
-  const vy = Math.sin(player.angle);
-
-  world.shots.push({
-    x: player.x + vx * 24,
-    y: player.y + vy * 24,
-    vx: vx * 510,
-    vy: vy * 510,
-    owner: player.id,
-    life: 1.5,
-    r: 6
-  });
+  const base = player.angle || 0, count = level >= 5 ? 3 : level >= 3 ? 2 : 1;
+  for (let i = 0; i < count; i++) {
+    const offset = count === 1 ? 0 : (i - (count - 1) / 2) * (count === 3 ? 0.22 : 0.12);
+    const angle = base + offset, vx = Math.cos(angle), vy = Math.sin(angle);
+    world.shots.push({x:player.x+vx*24,y:player.y+vy*24,vx:vx*(510+(level-1)*22),vy:vy*(510+(level-1)*22),owner:player.id,life:1.5,r:level>=4?8:6,damage:25+(level-1)*8});
+  }
 }
 
 function dropSnow(x, y, amount = 3) {
@@ -820,39 +823,26 @@ function dropSnow(x, y, amount = 3) {
 }
 
 function spawnEnemy() {
-  const side = Math.floor(Math.random() * 4);
-  let x;
-  let y;
+  const alive=world.players.filter(p=>p.alive);
+  const target=alive.length?alive[Math.floor(Math.random()*alive.length)]:{x:world.width/2,y:world.height/2};
+  const a=random(0,Math.PI*2),d=random(470,680);
+  const x=clamp(target.x+Math.cos(a)*d,30,world.width-30),y=clamp(target.y+Math.sin(a)*d,30,world.height-30);
+  let type="normal";if(world.level>=7&&Math.random()<0.12)type="boss";else if(world.level>=3&&Math.random()<0.28)type="heavy";
+  const scale=1+(world.level-1)*0.16,hp=Math.round((type==="boss"?210:type==="heavy"?85:35)*scale);
+  world.enemies.push({id:"enemy-"+enemyId++,type,x,y,r:(type==="boss"?31:type==="heavy"?23:16)+Math.min(world.level,8),hp,maxHp:hp,damage:type==="boss"?62:type==="heavy"?38:24,speed:(type==="boss"?38:type==="heavy"?34:45)+Math.min(world.level*2.5,45)});
+}
 
-  if (side === 0) {
-    x = random(0, world.width);
-    y = 20;
-  } else if (side === 1) {
-    x = world.width - 20;
-    y = random(0, world.height);
-  } else if (side === 2) {
-    x = random(0, world.width);
-    y = world.height - 20;
-  } else {
-    x = 20;
-    y = random(0, world.height);
-  }
-
-  const hp = 35 + world.level * 9;
-
-  world.enemies.push({
-    id: "enemy-" + enemyId++,
-    x,
-    y,
-    r: 16 + Math.min(world.level, 6),
-    hp,
-    maxHp: hp,
-    speed: 45 + world.level * 4
-  });
+function ensureEndlessWorld() {
+  const sx=world.players.some(p=>p.x<260),sy=world.players.some(p=>p.y<260);
+  if(sx){for(const p of world.players)p.x+=1000;for(const e of world.enemies)e.x+=1000;for(const d of world.snowballs)d.x+=1000;for(const q of world.shots)q.x+=1000;for(const w of world.walls)w.x+=1000;for(const h of world.houses)h.x+=1000;world.width+=1000;}
+  if(sy){for(const p of world.players)p.y+=800;for(const e of world.enemies)e.y+=800;for(const d of world.snowballs)d.y+=800;for(const q of world.shots)q.y+=800;for(const w of world.walls)w.y+=800;for(const h of world.houses)h.y+=800;world.height+=800;}
+  if(world.players.some(p=>p.x>world.width-320))world.width+=1000;
+  if(world.players.some(p=>p.y>world.height-320))world.height+=800;
 }
 
 function updateHost(dt, now) {
   if (!isHost || gameOver) return;
+  ensureEndlessWorld();
 
   for (const player of world.players) {
     if (!player.alive) continue;
@@ -894,7 +884,13 @@ function updateHost(dt, now) {
           player.r + drop.r + 4
       ) {
         player.snow += drop.amount;
+        player.totalSnowCollected = (player.totalSnowCollected || 0) + drop.amount;
         drop.amount = 0;
+        while (player.totalSnowCollected >= (player.nextUpgradeAt || 50)) {
+          player.weaponLevel = (player.weaponLevel || 1) + 1;
+          player.nextUpgradeAt = (player.nextUpgradeAt || 50) + 50;
+          if (player.id === localId) notify("Waffen-Upgrade! Waffe jetzt Stufe " + player.weaponLevel, 3200);
+        }
       }
     }
   }
@@ -949,7 +945,7 @@ function updateHost(dt, now) {
       Math.hypot(target.x - enemy.x, target.y - enemy.y) <
       enemy.r + target.r
     ) {
-      target.hp -= 24 * dt;
+      target.hp -= (enemy.damage || 24) * dt;
 
       if (target.hp <= 0) {
         target.hp = 0;
@@ -971,7 +967,7 @@ function updateHost(dt, now) {
         Math.hypot(shot.x - enemy.x, shot.y - enemy.y) <
         shot.r + enemy.r
       ) {
-        enemy.hp -= 25;
+        enemy.hp -= shot.damage || 25;
         shot.life = 0;
 
         if (enemy.hp <= 0) {
@@ -1138,29 +1134,13 @@ function drawWorld() {
   );
 
   for (const house of world.houses) {
-    const x = house.x - camera.x;
-    const y = house.y - camera.y;
-
-    ctx.fillStyle = "#a9784e";
-    ctx.fillRect(x, y, house.w, house.h);
-
-    ctx.fillStyle = "#6d4831";
-    ctx.beginPath();
-    ctx.moveTo(x - 5, y + 4);
-    ctx.lineTo(x + house.w / 2, y - 14);
-    ctx.lineTo(x + house.w + 5, y + 4);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = "#bfe9f2";
-    ctx.fillRect(
-      x + house.w * 0.62,
-      y + house.h * 0.35,
-      10,
-      12
-    );
+    const x=house.x-camera.x,y=house.y-camera.y;
+    ctx.fillStyle="#e8f8fc";ctx.beginPath();ctx.ellipse(x+house.w/2,y+house.h*0.62,house.w/2,house.h*0.58,0,Math.PI,0);
+    ctx.lineTo(x+house.w,y+house.h*0.82);ctx.quadraticCurveTo(x+house.w/2,y+house.h*1.15,x,y+house.h*0.82);ctx.closePath();ctx.fill();
+    ctx.strokeStyle="#8bbac8";ctx.lineWidth=2;ctx.stroke();ctx.strokeStyle="#b0dce7";ctx.lineWidth=1;
+    for(let row=0;row<3;row++){const yy=y+10+row*10;ctx.beginPath();ctx.moveTo(x+8,yy);ctx.lineTo(x+house.w-8,yy);ctx.stroke();}
+    ctx.fillStyle="#83b8c9";ctx.beginPath();ctx.arc(x+house.w/2,y+house.h-2,9,Math.PI,0);ctx.fill();
   }
-
   for (const wall of world.walls) {
     ctx.fillStyle = "#79a5b1";
     ctx.fillRect(
@@ -1212,7 +1192,7 @@ function drawWorld() {
     const x = enemy.x - camera.x;
     const y = enemy.y - camera.y;
 
-    ctx.fillStyle = "#c74343";
+    ctx.fillStyle = enemy.type === "boss" ? "#7e45b8" : enemy.type === "heavy" ? "#e27b32" : "#c74343";
     ctx.beginPath();
     ctx.arc(x, y, enemy.r, 0, Math.PI * 2);
     ctx.fill();
@@ -1308,6 +1288,7 @@ function updateUI(now) {
   snowStat.textContent = player ? player.snow : 0;
   playersStat.textContent = world.players.length + "/" + MAX_PLAYERS;
   enemiesStat.textContent = world.enemies.length;
+  weaponStat.textContent = "Stufe " + (player ? (player.weaponLevel || 1) : 1);
 
   playerList.replaceChildren();
 
@@ -1338,6 +1319,8 @@ function gameLoop(now) {
   );
 
   lastFrame = now;
+
+  if (paused) { updateCamera(); drawWorld(); drawMinimap(); updateUI(now); requestAnimationFrame(gameLoop); return; }
 
   if (isHost) {
     updateHost(dt, now);
@@ -1493,6 +1476,16 @@ document.getElementById("mobileHouseBtn").addEventListener("click", () => {
   buildFromClient("house");
 });
 
+function setPaused(value) {
+  paused=!!value&&running;
+  if(pauseOverlay)pauseOverlay.classList.toggle("hidden",!paused);
+  if(pauseBtn)pauseBtn.textContent=paused?"Fortsetzen":"Pause";
+  if(paused){touch.x=0;touch.y=0;touch.shooting=false;mouse.down=false;for(const k of Object.keys(keys))keys[k]=false;}
+}
+if(pauseBtn)pauseBtn.addEventListener("click",()=>setPaused(!paused));
+const resumeBtn=document.getElementById("resumeBtn");if(resumeBtn)resumeBtn.addEventListener("click",()=>setPaused(false));
+const pauseLeaveBtn=document.getElementById("pauseLeaveBtn");if(pauseLeaveBtn)pauseLeaveBtn.addEventListener("click",returnToMenu);
+window.addEventListener("keydown",event=>{if(event.key==="Escape"&&running){event.preventDefault();setPaused(!paused);}});
 document.getElementById("soloBtn").addEventListener("click", () => {
   closeNetwork();
   resetWorld();
