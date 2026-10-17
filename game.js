@@ -52,6 +52,8 @@ let joiningSent = false;
 let joinedGame = false;
 let enemyId = 1;
 let lastSpawn = 0;
+let gameStartedAt = 0;
+let nextTimedLevelAt = 0;
 
 const keys = {};
 const mouse = { x: VIEW_W / 2 + 100, y: VIEW_H / 2, down: false };
@@ -109,6 +111,8 @@ function resetWorld() {
 
   enemyId = 1;
   lastSpawn = 0;
+  gameStartedAt = 0;
+  nextTimedLevelAt = 0;
   gameOver = false;
   paused = false;
   if (pauseOverlay) pauseOverlay.classList.add("hidden");
@@ -822,41 +826,45 @@ function spawnEnemy() {
   else if(world.level>=4&&roll<0.58)type="ice";
   else if(world.level>=3&&roll<0.76)type="heavy";
   const scale=1+(world.level-1)*0.16;
-  const baseHp=({boss:210,elite:150,armored:115,ice:75,heavy:85,normal:35})[type];
-  const baseDamage=({boss:62,elite:48,armored:42,ice:32,heavy:38,normal:24})[type];
-  const baseSpeed=({boss:38,elite:58,armored:31,ice:55,heavy:34,normal:45})[type];
-  const baseRadius=({boss:31,elite:25,armored:24,ice:19,heavy:23,normal:16})[type];
+  // Eigene Gegnertypen werden nach und nach freigeschaltet.
+  if (world.level >= 15 && roll < 0.18) type = "phantom";
+  else if (world.level >= 10 && roll < 0.24) type = "crystal";
+  const baseHp=({boss:210,elite:150,armored:115,ice:75,heavy:85,normal:35,crystal:125,phantom:105})[type];
+  const baseDamage=({boss:62,elite:48,armored:42,ice:32,heavy:38,normal:24,crystal:45,phantom:39})[type];
+  const baseSpeed=({boss:38,elite:58,armored:31,ice:55,heavy:34,normal:45,crystal:48,phantom:78})[type];
+  const baseRadius=({boss:31,elite:25,armored:24,ice:19,heavy:23,normal:16,crystal:23,phantom:20})[type];
   const hp=Math.round(baseHp*scale);
   world.enemies.push({id:"enemy-"+enemyId++,type,x,y,r:baseRadius+Math.min(world.level,12),hp,maxHp:hp,damage:Math.round(baseDamage*(1+(world.level-1)*0.08)),speed:baseSpeed+Math.min(world.level*2.5,65)});
 }
 
-function shiftWorld(dx, dy) {
-  // Verschiebt alle Weltobjekte gemeinsam, damit der Übergang unsichtbar bleibt.
-  for (const p of world.players) { p.x += dx; p.y += dy; }
-  for (const e of world.enemies) { e.x += dx; e.y += dy; }
-  for (const d of world.snowballs) { d.x += dx; d.y += dy; }
-  for (const q of world.shots) { q.x += dx; q.y += dy; }
-  for (const w of world.walls) { w.x += dx; w.y += dy; }
-  for (const h of world.houses) { h.x += dx; h.y += dy; }
-}
-
 function ensureEndlessWorld() {
-  // Früh genug erweitern, bevor ein Spieler den bisherigen Kartenrand erreicht.
-  if (world.players.some(p => p.x < 500)) {
-    shiftWorld(1200, 0);
-    world.width += 1200;
+  // Wichtig: Niemals Spieler oder Weltobjekte verschieben. Das verursachte
+  // Teleports, sobald jemand in die Nähe des alten Kartenrands kam.
+  // Die Spielfläche hat keine Begrenzung; diese Werte dienen nur der Minimap
+  // und werden rein anhand positiver Koordinaten vergrößert.
+  for (const p of world.players) {
+    if (p.x > world.width - 600) world.width = Math.ceil((p.x + 1200) / 600) * 600;
+    if (p.y > world.height - 500) world.height = Math.ceil((p.y + 1000) / 500) * 500;
   }
-  if (world.players.some(p => p.y < 450)) {
-    shiftWorld(0, 1000);
-    world.height += 1000;
-  }
-  if (world.players.some(p => p.x > world.width - 500)) world.width += 1200;
-  if (world.players.some(p => p.y > world.height - 450)) world.height += 1000;
 }
 
 function updateHost(dt, now) {
   if (!isHost || gameOver) return;
   ensureEndlessWorld();
+
+  // Das Level steigt garantiert mit der Spielzeit, auch wenn noch Gegner leben.
+  if (!gameStartedAt) {
+    gameStartedAt = now;
+    nextTimedLevelAt = now + 30000;
+  }
+  if (now >= nextTimedLevelAt) {
+    world.level++;
+    nextTimedLevelAt += 30000;
+    for (const player of world.players) {
+      if (player.alive) player.snow += 5;
+    }
+    notify("Level " + world.level + " – die Gegner werden stärker!", 3200);
+  }
 
   for (const player of world.players) {
     if (!player.alive) continue;
@@ -1019,17 +1027,8 @@ function updateHost(dt, now) {
 
   world.enemies = world.enemies.filter(enemy => enemy.hp > 0);
 
-  if (world.enemies.length === 0 && now - lastSpawn > 1800) {
-    world.level++;
-    world.width += 350;
-    world.height += 250;
-
-    for (const player of world.players) {
-      if (player.alive) player.snow += 5;
-    }
-
-    notify("Level " + world.level + " erreicht!");
-  }
+  // Levelaufstieg läuft zeitbasiert oben in updateHost, nicht nur wenn
+  // zufällig gerade keine Gegner auf der Karte sind.
 
   if (
     world.players.length > 0 &&
@@ -1203,11 +1202,30 @@ function drawWorld() {
 
     const enemyColors = {
       normal: "#c74343", heavy: "#e27b32", ice: "#39b9d5",
-      armored: "#687783", elite: "#d83c91", boss: "#7e45b8"
+      armored: "#687783", elite: "#d83c91", boss: "#7e45b8",
+      crystal: "#39d9a7", phantom: "#5144a8"
     };
     ctx.fillStyle = enemyColors[enemy.type] || enemyColors.normal;
     ctx.beginPath();
-    if (enemy.type === "ice") {
+    if (enemy.type === "crystal") {
+      // Kristallgegner: kantige, sechszackige Silhouette.
+      for (let i = 0; i < 6; i++) {
+        const a = i * Math.PI / 3 - Math.PI / 2;
+        const px = x + Math.cos(a) * (i % 2 === 0 ? enemy.r + 5 : enemy.r * 0.72);
+        const py = y + Math.sin(a) * (i % 2 === 0 ? enemy.r + 5 : enemy.r * 0.72);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+    } else if (enemy.type === "phantom") {
+      // Phantomgegner: rautenförmiger Schatten mit Spitzen.
+      ctx.moveTo(x, y - enemy.r - 7);
+      ctx.lineTo(x + enemy.r * 0.72, y - enemy.r * 0.15);
+      ctx.lineTo(x + enemy.r, y + enemy.r * 0.75);
+      ctx.lineTo(x, y + enemy.r * 0.45);
+      ctx.lineTo(x - enemy.r, y + enemy.r * 0.75);
+      ctx.lineTo(x - enemy.r * 0.72, y - enemy.r * 0.15);
+      ctx.closePath();
+    } else if (enemy.type === "ice") {
       ctx.moveTo(x, y - enemy.r - 4);
       ctx.lineTo(x + enemy.r, y);
       ctx.lineTo(x, y + enemy.r + 4);
@@ -1237,6 +1255,14 @@ function drawWorld() {
     } else if (enemy.type === "elite" || enemy.type === "boss") {
       ctx.strokeStyle = enemy.type === "boss" ? "#e6c8ff" : "#ffc6e4";
       ctx.lineWidth = 3; ctx.stroke();
+    } else if (enemy.type === "crystal" || enemy.type === "phantom") {
+      ctx.strokeStyle = enemy.type === "crystal" ? "#d1fff1" : "#c9c1ff";
+      ctx.lineWidth = 3; ctx.stroke();
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.arc(x, y, enemy.r * 0.55, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
     }
 
     ctx.fillStyle = "#fff";
