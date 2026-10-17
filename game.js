@@ -873,6 +873,7 @@ function applyUpgradeChoice(player, upgradeId) {
   const upgrade = UPGRADE_POOL.find(item => item.id === upgradeId);
   if (!upgrade) return false;
   upgrade.apply(player);
+  player.weaponLevel = (player.weaponLevel || 1) + 1;
   player.pendingUpgradeChoices = [];
   if (player.id === localId) notify("Upgrade gewählt: " + upgrade.title, 2600);
   return true;
@@ -1012,7 +1013,6 @@ function updateHost(dt, now) {
         drop.amount = 0;
         if (!player.pendingUpgradeChoices || !player.pendingUpgradeChoices.length) {
           while (player.totalSnowCollected >= (player.nextUpgradeAt || 50)) {
-            player.weaponLevel = (player.weaponLevel || 1) + 1;
             player.nextUpgradeAt = (player.nextUpgradeAt || 50) + 50;
             player.pendingUpgradeChoices = makeUpgradeChoices();
             if (player.id === localId) notify("Wähle dein Upgrade!", 3200);
