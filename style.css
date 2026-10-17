@@ -114,3 +114,43 @@ input:focus{border-color:var(--cyan)}
   .joystick,.mobile-actions{pointer-events:auto}
   .game-panel{isolation:isolate}
 }
+
+/* Touch-Geräte: Steuerung unabhängig von gemeldeter Displaybreite und Ausrichtung erzwingen. */
+@media (pointer: coarse), (hover: none) {
+  .mobile-controls {
+    display: flex !important;
+    position: fixed !important;
+    left: 12px !important;
+    right: 12px !important;
+    bottom: max(12px, env(safe-area-inset-bottom)) !important;
+    z-index: 20001 !important;
+    align-items: flex-end !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+    pointer-events: none !important;
+  }
+  .mobile-controls .joystick,
+  .mobile-controls .mobile-actions,
+  .mobile-controls .mobile-build-row,
+  .mobile-controls .shoot-button,
+  .mobile-controls .mobile-build {
+    position: relative !important;
+    z-index: 20002 !important;
+    pointer-events: auto !important;
+  }
+  .mobile-controls .joystick {
+    width: 112px !important;
+    height: 112px !important;
+    flex: 0 0 112px !important;
+  }
+  .mobile-controls .stick {
+    left: 32px;
+    top: 32px;
+  }
+  .mobile-controls .shoot-button {
+    min-width: 104px !important;
+    min-height: 54px !important;
+  }
+  .rotate-prompt { display: none !important; }
+}
+
