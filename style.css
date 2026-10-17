@@ -59,7 +59,9 @@ input:focus{border-color:var(--cyan)}
 /* Mobile gameplay is designed for landscape orientation. */
 .rotate-prompt{display:none}
 @media (max-width:900px) and (orientation:landscape){
-  body{overflow:hidden}
+  /* Menü bleibt scrollbar, auch wenn es im Querformat höher als der Bildschirm ist. */
+  body{overflow-x:hidden;overflow-y:auto}
+  body.game-running{overflow:hidden}
   #gamePanel{padding:4px}
   .topbar{padding:4px 8px;margin-bottom:4px;gap:8px;flex-wrap:nowrap}
   .brand{font-size:11px;white-space:nowrap}
