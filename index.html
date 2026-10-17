@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attacke Pinguin – Koop Survival</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="menu" class="screen">
+    <div class="menu-card">
+      <div class="logo">🐧</div>
+      <p class="eyebrow">CO-OP SURVIVAL</p>
+      <h1>ATTACKE<br><span>PINGUIN</span></h1>
+      <p class="subtitle">Erkunde. Überlebe. Baue. Kämpfe zusammen.</p>
+
+      <label for="playerName">Dein Spielername</label>
+      <input id="playerName" maxlength="16" value="Pinguin 1" autocomplete="nickname">
+
+      <button id="hostBtn" class="primary">Gruppe erstellen</button>
+
+      <div id="roomBox" class="room-box hidden">
+        <p>DEINE RAUM-ID</p>
+        <div class="room-row">
+          <strong id="roomCode">----</strong>
+          <button id="copyRoomBtn" class="small">Kopieren</button>
+        </div>
+        <p class="muted">Schicke deinem Freund die ID und die Adresse dieser Spielseite.</p>
+        <div class="loader"></div>
+        <p id="hostStatus">Warte auf deinen Mitspieler …</p>
+        <button id="startBtn" class="primary" disabled>Spiel starten</button>
+      </div>
+
+      <div class="separator"><span>ODER BEITRETEN</span></div>
+
+      <label for="joinCode">Raum-ID deines Freundes</label>
+      <input id="joinCode" maxlength="8" placeholder="z. B. K7P2Q9">
+      <button id="joinBtn" class="secondary">Gruppe beitreten</button>
+
+      <p id="menuStatus" class="status" role="status"></p>
+      <p class="controls-note">WASD = bewegen · Maus = zielen · Klick = Schneeball werfen<br>
+      E = Wand bauen · H = Haus bauen · P = Pause</p>
+    </div>
+  </div>
+
+  <main id="gameScreen" class="hidden">
+    <header class="topbar">
+      <div class="brand"><span>🐧</span> ATTACKE PINGUIN</div>
+      <div class="stats">
+        <div class="stat"><small>LEVEL</small><strong id="level">1</strong></div>
+        <div class="stat"><small>GEBIET</small><strong id="mapSize">1×</strong></div>
+        <div class="stat"><small>GEGNER</small><strong id="enemyCount">0</strong></div>
+        <div class="stat"><small>DEINE SCHNEEBÄLLE</small><strong id="snow">0</strong></div>
+      </div>
+      <button id="pauseBtn" class="pause-button">Pause</button>
+    </header>
+
+    <div class="game-layout">
+      <section class="game-panel">
+        <canvas id="gameCanvas" width="1100" height="700"></canvas>
+        <div id="gameMessage" class="game-message hidden"></div>
+        <div class="canvas-help">WASD bewegen · Maus zielen · Linksklick werfen · E Wand · H Haus</div>
+      </section>
+
+      <aside class="sidebar">
+        <div class="side-card">
+          <p class="eyebrow">DEIN TEAM</p>
+          <div id="playersList"></div>
+        </div>
+        <div class="side-card">
+          <p class="eyebrow">BAUEN</p>
+          <div class="build-option"><span class="build-icon">▰</span><div><strong>Schneewand</strong><small>10 Schneebälle</small></div><kbd>E</kbd></div>
+          <div class="build-option"><span class="build-icon">⌂</span><div><strong>Schneehaus</strong><small>35 Schneebälle</small></div><kbd>H</kbd></div>
+          <p class="muted">Baue vor dir. Gebäude blockieren Gegner und Geschosse.</p>
+        </div>
+        <div class="side-card">
+          <p class="eyebrow">ÜBERLEBEN</p>
+          <div class="progress-label"><span>Team-Fortschritt</span><strong id="progressText">0 / 12</strong></div>
+          <div class="progress-track"><div id="progressBar"></div></div>
+          <p id="difficultyText" class="muted">Die Kälte schläft nie.</p>
+        </div>
+        <div class="side-card">
+          <p class="eyebrow">GRUPPE</p>
+          <div class="connection-row"><span class="connection-dot"></span><span id="connectionText">Verbinde …</span></div>
+          <button id="leaveBtn" class="secondary">Spiel verlassen</button>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <div id="overlay" class="overlay hidden">
+    <div class="overlay-card">
+      <div id="overlayIcon" class="overlay-icon">❄️</div>
+      <p class="eyebrow">ATTACKE PINGUIN</p>
+      <h2 id="overlayTitle">Pause</h2>
+      <p id="overlayText">Das Spiel ist pausiert.</p>
+      <button id="resumeBtn" class="primary">Weiter spielen</button>
+      <button id="menuBtn" class="secondary">Zum Menü</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
