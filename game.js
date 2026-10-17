@@ -1,926 +1,1527 @@
-const $ = (id) => document.getElementById(id);
-const canvas = $("gameCanvas");
+
+"use strict";
+
+/* ATTACKE PINGUIN — Online-Spiel für bis zu 10 Spieler */
+
+const MAX_PLAYERS = 10;
+const VIEW_W = 960;
+const VIEW_H = 600;
+
+const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+const mini = document.getElementById("minimap");
+const mctx = mini.getContext("2d");
+
+const menu = document.getElementById("menu");
+const gamePanel = document.getElementById("gamePanel");
+const nameInput = document.getElementById("playerName");
+const roomInput = document.getElementById("roomInput");
+const menuMessage = document.getElementById("menuMessage");
+const roomLabel = document.getElementById("roomLabel");
+const connectionLabel = document.getElementById("connectionLabel");
+const notice = document.getElementById("notice");
+const playerList = document.getElementById("playerList");
+
+const levelStat = document.getElementById("levelStat");
+const snowStat = document.getElementById("snowStat");
+const playersStat = document.getElementById("playersStat");
+const enemiesStat = document.getElementById("enemiesStat");
 
 let peer = null;
-let connection = null;
-let isHost = false;
-let connected = false;
-let gameStarted = false;
-let paused = false;
-let gameOver = false;
-let localId = "p1";
-let roomCode = "";
-let localName = "Pinguin 1";
-let remoteName = "Pinguin 2";
-let state = null;
-let lastSnapshot = 0;
-let lastSentInput = 0;
-let previousKeys = {};
-let mouse = { x: 550, y: 350, down: false };
-let keys = {};
-let lastFrame = performance.now();
-let messageTimer = null;
+let hostConnection = null;
+let connections = new Map();
+let pendingConnections = new Set();
 
-const COLORS = {
-  ground: "#c5e5eb",
-  groundAlt: "#b9dce4",
-  grid: "#a5ced8",
-  wall: "#eaf8fc",
-  house: "#f0f6f5",
-  enemy: "#e56d67",
-  fast: "#e8a64c",
-  tank: "#a77bd7",
-  shooter: "#6d99e9"
+let isHost = false;
+let online = false;
+let running = false;
+let gameOver = false;
+let roomCode = "";
+let localId = "";
+
+let lastFrame = 0;
+let lastSnapshot = 0;
+let lastInputSend = 0;
+let noticeUntil = 0;
+let joiningSent = false;
+let joinedGame = false;
+let enemyId = 1;
+let lastSpawn = 0;
+
+const keys = {};
+const mouse = { x: VIEW_W / 2 + 100, y: VIEW_H / 2, down: false };
+const touch = { x: 0, y: 0, shooting: false };
+
+const world = {
+  width: 1800,
+  height: 1400,
+  level: 1,
+  players: [],
+  enemies: [],
+  snowballs: [],
+  walls: [],
+  houses: [],
+  shots: []
 };
 
-function newWorld() {
-  return {
-    started: false,
-    level: 1,
-    kills: 0,
-    needed: 12,
-    worldSize: 1800,
-    time: 0,
-    players: {},
-    enemies: [],
-    bullets: [],
-    enemyBullets: [],
-    drops: [],
-    buildings: [],
-    nextEnemy: 0,
-    enemyId: 0,
-    bulletId: 0,
-    dropId: 0,
-    buildingId: 0,
-    paused: false,
-    over: false
-  };
+const camera = { x: 0, y: 0 };
+
+function random(min, max) {
+  return min + Math.random() * (max - min);
 }
 
-function makePlayer(id, name, x, y) {
-  return {
-    id, name, x, y,
-    hp: 100,
-    snow: 30,
-    kills: 0,
-    speed: 230,
-    angle: 0,
-    shootCooldown: 0,
-    buildCooldown: 0,
-    invincible: 0,
-    alive: true,
-    input: { up: false, down: false, left: false, right: false,
-      shoot: false, angle: 0, wall: false, house: false }
-  };
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
-function setMenuStatus(text) {
-  $("menuStatus").textContent = text;
-}
-
-function showGame() {
-  $("menu").classList.add("hidden");
-  $("gameScreen").classList.remove("hidden");
-}
-
-function showMenu() {
-  $("menu").classList.remove("hidden");
-  $("gameScreen").classList.add("hidden");
-  $("overlay").classList.add("hidden");
-  $("roomBox").classList.add("hidden");
-  $("hostBtn").disabled = false;
-  $("joinBtn").disabled = false;
-  $("joinCode").disabled = false;
-  $("playerName").disabled = false;
-  $("startBtn").disabled = true;
-  $("hostStatus").textContent = "Warte auf deinen Mitspieler …";
-  $("menuStatus").textContent = "";
-  $("roomCode").textContent = "----";
-  $("connectionText").textContent = "Nicht verbunden";
-  $("hostBtn").textContent = "Gruppe erstellen";
-}
-
-function showMessage(text) {
-  const box = $("gameMessage");
-  box.textContent = text;
-  box.classList.remove("hidden");
-  clearTimeout(messageTimer);
-  messageTimer = setTimeout(() => box.classList.add("hidden"), 2500);
+function makeId(prefix = "p") {
+  return prefix + Math.random().toString(36).slice(2, 9);
 }
 
 function getName() {
-  return $("playerName").value.trim().slice(0, 16) || "Pinguin";
+  return (nameInput.value || "Pinguin").trim().slice(0, 16) || "Pinguin";
 }
 
-function cleanupNetwork() {
-  connected = false;
-  gameStarted = false;
-  connection = null;
-  if (peer) {
-    try { peer.destroy(); } catch (_) {}
-  }
-  peer = null;
+function notify(text, duration = 2500) {
+  notice.textContent = text;
+  noticeUntil = performance.now() + duration;
 }
 
-function resetSession() {
-  cleanupNetwork();
-  state = null;
-  paused = false;
+function menuStatus(text) {
+  menuMessage.textContent = text;
+}
+
+function resetWorld() {
+  world.width = 1800;
+  world.height = 1400;
+  world.level = 1;
+  world.players = [];
+  world.enemies = [];
+  world.snowballs = [];
+  world.walls = [];
+  world.houses = [];
+  world.shots = [];
+
+  enemyId = 1;
+  lastSpawn = 0;
   gameOver = false;
-  previousKeys = {};
-  keys = {};
-  mouse.down = false;
-  showMenu();
+  joinedGame = false;
+  joiningSent = false;
 }
 
-$("hostBtn").addEventListener("click", () => {
-  if (typeof Peer === "undefined") {
-    setMenuStatus("Die Netzwerkbibliothek konnte nicht geladen werden. Prüfe deine Internetverbindung.");
-    return;
-  }
-
-  cleanupNetwork();
-  isHost = true;
-  localId = "p1";
-  localName = getName();
-  roomCode = Math.random().toString(36).slice(2, 8).toUpperCase();
-
-  $("hostBtn").disabled = true;
-  $("joinBtn").disabled = true;
-  $("joinCode").disabled = true;
-  $("playerName").disabled = true;
-  $("roomBox").classList.remove("hidden");
-  $("roomCode").textContent = roomCode;
-  $("hostStatus").textContent = "Erstelle die Verbindung …";
-  setMenuStatus("");
-
-  peer = new Peer("attacke-pinguin-" + roomCode.toLowerCase());
-
-  peer.on("open", () => {
-    $("hostStatus").textContent = "Raum bereit. Warte auf deinen Freund …";
-  });
-
-  peer.on("connection", (conn) => {
-    if (connection && connection.open) {
-      conn.close();
-      return;
-    }
-    connection = conn;
-    conn.on("open", () => {
-      connected = true;
-      $("hostStatus").textContent = "Mitspieler verbunden: " + remoteName;
-      $("startBtn").disabled = false;
-      $("startBtn").textContent = "Gemeinsam starten";
-      conn.send({ type: "welcome", name: localName, room: roomCode });
-    });
-    conn.on("data", handleHostMessage);
-    conn.on("close", () => handleDisconnect());
-    conn.on("error", () => handleDisconnect());
-  });
-
-  peer.on("error", (err) => {
-    const reason = err.type === "unavailable-id"
-      ? "Raum-ID bereits vergeben. Erstelle eine neue Gruppe."
-      : "Verbindung fehlgeschlagen (" + err.type + "). Prüfe Internet und versuche es erneut.";
-    setMenuStatus(reason);
-    $("hostBtn").disabled = false;
-    $("joinBtn").disabled = false;
-    $("joinCode").disabled = false;
-    $("playerName").disabled = false;
-  });
-});
-
-$("copyRoomBtn").addEventListener("click", async () => {
-  try {
-    await navigator.clipboard.writeText(roomCode);
-    $("copyRoomBtn").textContent = "Kopiert!";
-    setTimeout(() => $("copyRoomBtn").textContent = "Kopieren", 1500);
-  } catch (_) {
-    setMenuStatus("Raum-ID bitte manuell kopieren: " + roomCode);
-  }
-});
-
-$("startBtn").addEventListener("click", () => {
-  if (!isHost || !connected || !connection) return;
-
-  state = newWorld();
-  state.players.p1 = makePlayer("p1", localName, 0, 0);
-  state.players.p2 = makePlayer("p2", remoteName, 100, 0);
-  state.started = true;
-  gameStarted = true;
-  paused = false;
-  gameOver = false;
-  spawnWave();
-  connection.send({ type: "start", name: localName });
-  showGame();
-  showMessage("Überlebt gemeinsam. Baut eure Verteidigung!");
-});
-
-$("joinBtn").addEventListener("click", () => {
-  if (typeof Peer === "undefined") {
-    setMenuStatus("Die Netzwerkbibliothek konnte nicht geladen werden. Prüfe deine Internetverbindung.");
-    return;
-  }
-
-  const code = $("joinCode").value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (code.length < 4) {
-    setMenuStatus("Gib die Raum-ID deines Freundes ein.");
-    return;
-  }
-
-  cleanupNetwork();
-  isHost = false;
-  localId = "p2";
-  localName = getName();
-  roomCode = code;
-  $("hostBtn").disabled = true;
-  $("joinBtn").disabled = true;
-  $("joinCode").disabled = true;
-  $("playerName").disabled = true;
-  setMenuStatus("Verbinde mit Raum " + code + " …");
-
-  peer = new Peer();
-
-  peer.on("open", () => {
-    connection = peer.connect("attacke-pinguin-" + code.toLowerCase(), {
-      reliable: true
-    });
-
-    connection.on("open", () => {
-      connected = true;
-      connection.send({ type: "hello", name: localName });
-      setMenuStatus("Verbunden. Warte, bis der Host das Spiel startet …");
-    });
-
-    connection.on("data", (data) => {
-      if (!data || typeof data !== "object") return;
-
-      if (data.type === "welcome") {
-        remoteName = data.name || "Host";
-        setMenuStatus("Mit " + remoteName + " verbunden. Warte auf Spielstart …");
-      } else if (data.type === "start") {
-        gameStarted = true;
-        showGame();
-      } else if (data.type === "snapshot") {
-        state = data.state;
-        gameStarted = true;
-        showGame();
-        if (state.over && !gameOver) {
-          gameOver = true;
-          showOverlay("💥", "Team besiegt", "Eure Gruppe wurde überwältigt.", "Zum Menü");
-        }
-        if (state.paused && !$("overlay").classList.contains("hidden")) return;
-        if (!state.paused && paused) {
-          paused = false;
-          $("overlay").classList.add("hidden");
-        }
-        updateHUD();
-      } else if (data.type === "notice") {
-        showMessage(data.text);
-      } else if (data.type === "closed") {
-        handleDisconnect();
-      }
-    });
-
-    connection.on("close", handleDisconnect);
-    connection.on("error", handleDisconnect);
-  });
-
-  peer.on("error", (err) => {
-    setMenuStatus("Verbindung fehlgeschlagen (" + err.type + "). Prüfe die Raum-ID und versuche es erneut.");
-    $("hostBtn").disabled = false;
-    $("joinBtn").disabled = false;
-    $("joinCode").disabled = false;
-    $("playerName").disabled = false;
-  });
-});
-
-function handleHostMessage(data) {
-  if (!data || typeof data !== "object") return;
-
-  if (data.type === "hello") {
-    remoteName = String(data.name || "Pinguin 2").slice(0, 16);
-    if (state && state.players.p2) state.players.p2.name = remoteName;
-    $("hostStatus").textContent = "Mitspieler verbunden: " + remoteName;
-  } else if (data.type === "input" && state && state.players.p2) {
-    const p = state.players.p2;
-    const input = data.input || {};
-    p.input.up = !!input.up;
-    p.input.down = !!input.down;
-    p.input.left = !!input.left;
-    p.input.right = !!input.right;
-    p.input.shoot = !!input.shoot;
-    p.input.angle = Number(input.angle) || 0;
-    p.input.wall = !!input.wall;
-    p.input.house = !!input.house;
-  } else if (data.type === "pause" && state) {
-    state.paused = !!data.paused;
-    paused = state.paused;
-    if (paused) showOverlay("❄️", "Pause", "Das Spiel wurde pausiert.", "Weiter spielen");
-    else $("overlay").classList.add("hidden");
-  }
-}
-
-function handleDisconnect() {
-  connected = false;
-  if (isHost) {
-    $("hostStatus").textContent = "Mitspieler getrennt. Warte auf erneute Verbindung.";
-    $("startBtn").disabled = true;
-  } else if (gameStarted) {
-    showOverlay("📡", "Verbindung verloren", "Der Host ist nicht mehr erreichbar.", "Zum Menü");
-  } else {
-    setMenuStatus("Verbindung unterbrochen. Prüfe die Raum-ID und versuche es erneut.");
-  }
-  $("connectionText").textContent = "Verbindung getrennt";
-}
-
-function getCamera() {
-  if (!state || !state.players[localId]) return { x: 0, y: 0 };
-  const p = state.players[localId];
+function makePlayer(id, name, x, y, local = false) {
   return {
-    x: p.x - canvas.width / 2,
-    y: p.y - canvas.height / 2
+    id,
+    name,
+    x,
+    y,
+    r: 17,
+    speed: 220,
+    angle: 0,
+    hp: 100,
+    snow: 15,
+    alive: true,
+    isLocal: local,
+    input: {
+      dx: 0,
+      dy: 0,
+      aimX: 1,
+      aimY: 0,
+      shoot: false,
+      wall: false,
+      house: false
+    },
+    lastShot: 0,
+    lastWall: 0,
+    lastHouse: 0
   };
 }
 
-function getLocalInput() {
-  const camera = getCamera();
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
-  const mx = (mouse.x - rect.left) * scaleX + camera.x;
-  const my = (mouse.y - rect.top) * scaleY + camera.y;
-  const p = state && state.players[localId];
+function closeNetwork() {
+  if (hostConnection) {
+    try {
+      hostConnection.close();
+    } catch (_) {}
+  }
+
+  hostConnection = null;
+
+  for (const conn of connections.values()) {
+    try {
+      conn.close();
+    } catch (_) {}
+  }
+
+  for (const conn of pendingConnections) {
+    try {
+      conn.close();
+    } catch (_) {}
+  }
+
+  connections.clear();
+  pendingConnections.clear();
+
+  if (peer) {
+    try {
+      peer.destroy();
+    } catch (_) {}
+  }
+
+  peer = null;
+  online = false;
+  isHost = false;
+  joinedGame = false;
+}
+
+function returnToMenu() {
+  running = false;
+  closeNetwork();
+  gamePanel.classList.add("hidden");
+  menu.classList.remove("hidden");
+}
+
+function startGame() {
+  if (running) return;
+
+  running = true;
+  joinedGame = true;
+
+  menu.classList.add("hidden");
+  gamePanel.classList.remove("hidden");
+
+  roomLabel.textContent = online ? "Raum: " + roomCode : "Solo-Spiel";
+  connectionLabel.textContent = online
+    ? (isHost ? "Host · maximal 10 Spieler" : "Mit Host verbunden")
+    : "Offline-Spiel";
+
+  lastFrame = performance.now();
+  notify(
+    online
+      ? "Gemeinsame Partie gestartet. Raumcode: " + roomCode
+      : "Sammle Schneebälle und besiege die Gegner!"
+  );
+
+  requestAnimationFrame(gameLoop);
+}
+
+/* -------------------- PeerJS-Verbindung -------------------- */
+
+function createPeer(id) {
+  return new Promise((resolve, reject) => {
+    if (typeof Peer === "undefined") {
+      reject(new Error("PeerJS konnte nicht geladen werden."));
+      return;
+    }
+
+    const newPeer = new Peer(id, { debug: 0 });
+    let opened = false;
+
+    const timeout = setTimeout(() => {
+      if (!opened) {
+        try {
+          newPeer.destroy();
+        } catch (_) {}
+        reject(new Error("Zeitüberschreitung beim Verbinden."));
+      }
+    }, 15000);
+
+    newPeer.on("open", () => {
+      opened = true;
+      clearTimeout(timeout);
+      peer = newPeer;
+      resolve(newPeer);
+    });
+
+    newPeer.on("error", err => {
+      if (!opened) {
+        clearTimeout(timeout);
+        reject(err);
+      } else {
+        console.error("PeerJS:", err);
+      }
+    });
+
+    newPeer.on("disconnected", () => {
+      if (running && online) {
+        connectionLabel.textContent = "Verbindung unterbrochen";
+      }
+    });
+  });
+}
+
+function createRoomCode() {
+  return Math.random().toString(36).slice(2, 7).toUpperCase();
+}
+
+async function createOnlineRoom() {
+  closeNetwork();
+  resetWorld();
+
+  isHost = true;
+  online = true;
+  roomCode = createRoomCode();
+  localId = makeId("host-");
+
+  menuStatus("Online-Raum wird erstellt ...");
+
+  try {
+    await createPeer("ap-" + roomCode.toLowerCase());
+
+    world.players.push(
+      makePlayer(localId, getName(), 220, 220, true)
+    );
+
+    peer.on("connection", handleIncomingConnection);
+
+    startGame();
+    notify("Dein Raumcode: " + roomCode, 7000);
+  } catch (error) {
+    closeNetwork();
+    menuStatus(
+      "Raum konnte nicht erstellt werden. Bitte erneut versuchen."
+    );
+    console.error(error);
+  }
+}
+
+/*
+ * Der Host nimmt höchstens neun Mitspieler auf.
+ * Zusammen mit dem Host sind das maximal zehn Spieler.
+ */
+function handleIncomingConnection(conn) {
+  const currentConnections =
+    connections.size + pendingConnections.size;
+
+  if (currentConnections >= MAX_PLAYERS - 1) {
+    conn.on("open", () => {
+      try {
+        conn.send({
+          type: "full",
+          message: "Der Raum ist voll. Maximal 10 Spieler."
+        });
+      } catch (_) {}
+
+      setTimeout(() => {
+        try {
+          conn.close();
+        } catch (_) {}
+      }, 300);
+    });
+    return;
+  }
+
+  pendingConnections.add(conn);
+
+  conn.on("open", () => {
+    pendingConnections.delete(conn);
+    connections.set(conn.peer, conn);
+
+    /*
+     * Wichtig: Hier wird noch kein Spieler erzeugt.
+     * Erst die join-Nachricht erzeugt genau einen Spieler.
+     */
+    conn.send({
+      type: "welcome",
+      room: roomCode,
+      maxPlayers: MAX_PLAYERS
+    });
+  });
+
+  conn.on("data", data => {
+    if (!data || typeof data !== "object") return;
+
+    if (data.type === "join") {
+      handlePlayerJoin(conn, data);
+      return;
+    }
+
+    if (data.type === "input" && conn.playerId) {
+      const player = world.players.find(
+        p => p.id === conn.playerId
+      );
+
+      if (!player) return;
+
+      player.input = sanitizeInput(data.input);
+      player.name = String(data.name || player.name).slice(0, 16);
+      return;
+    }
+
+    if (data.type === "build" && conn.playerId) {
+      const player = world.players.find(
+        p => p.id === conn.playerId
+      );
+
+      if (!player || !player.alive) return;
+
+      if (data.building === "wall") {
+        buildStructure(player, "wall");
+      } else if (data.building === "house") {
+        buildStructure(player, "house");
+      }
+      return;
+    }
+
+    if (data.type === "leave" && conn.playerId) {
+      removePlayer(conn.playerId);
+      conn.playerId = null;
+    }
+  });
+
+  conn.on("close", () => {
+    pendingConnections.delete(conn);
+    connections.delete(conn.peer);
+
+    if (conn.playerId) {
+      removePlayer(conn.playerId);
+      conn.playerId = null;
+    }
+  });
+
+  conn.on("error", () => {
+    pendingConnections.delete(conn);
+    connections.delete(conn.peer);
+
+    if (conn.playerId) {
+      removePlayer(conn.playerId);
+      conn.playerId = null;
+    }
+  });
+}
+
+function handlePlayerJoin(conn, data) {
+  // Verhindert, dass ein Client mehrere Spieler erzeugt.
+  if (conn.playerId) {
+    sendSnapshotTo(conn);
+    return;
+  }
+
+  if (world.players.length >= MAX_PLAYERS) {
+    try {
+      conn.send({
+        type: "full",
+        message: "Der Raum ist voll. Maximal 10 Spieler."
+      });
+    } catch (_) {}
+    return;
+  }
+
+  const id = makeId("guest-");
+
+  const player = makePlayer(
+    id,
+    String(data.name || "Pinguin").slice(0, 16),
+    random(100, world.width - 100),
+    random(100, world.height - 100),
+    false
+  );
+
+  conn.playerId = id;
+  world.players.push(player);
+
+  // Erst ID senden, dann den aktuellen Spielstand übertragen.
+  conn.send({
+    type: "joined",
+    id,
+    room: roomCode,
+    maxPlayers: MAX_PLAYERS
+  });
+
+  broadcastSnapshot();
+}
+
+function sanitizeInput(input) {
+  if (!input || typeof input !== "object") {
+    return {
+      dx: 0, dy: 0, aimX: 1, aimY: 0,
+      shoot: false, wall: false, house: false
+    };
+  }
 
   return {
-    up: !!(keys.w || keys.ArrowUp),
-    down: !!(keys.s || keys.ArrowDown),
-    left: !!(keys.a || keys.ArrowLeft),
-    right: !!(keys.d || keys.ArrowRight),
-    shoot: !!mouse.down,
-    angle: p ? Math.atan2(my - p.y, mx - p.x) : 0,
+    dx: clamp(Number(input.dx) || 0, -1, 1),
+    dy: clamp(Number(input.dy) || 0, -1, 1),
+    aimX: clamp(Number(input.aimX) || 0, -1, 1),
+    aimY: clamp(Number(input.aimY) || 0, -1, 1),
+    shoot: !!input.shoot,
+    wall: !!input.wall,
+    house: !!input.house
+  };
+}
+
+async function joinOnlineRoom() {
+  const code = roomInput.value.trim().toUpperCase();
+
+  if (!/^[A-Z0-9]{5}$/.test(code)) {
+    menuStatus("Gib den fünfstelligen Raumcode ein.");
+    return;
+  }
+
+  closeNetwork();
+  resetWorld();
+
+  isHost = false;
+  online = true;
+  roomCode = code;
+  localId = "";
+
+  menuStatus("Verbinde mit Raum " + code + " ...");
+
+  try {
+    /*
+     * Jeder Mitspieler erhält eine eigene Peer-ID.
+     * Die Verbindung zum Host wird danach geöffnet.
+     */
+    await createPeer(makeId("client-"));
+
+    hostConnection = peer.connect(
+      "ap-" + code.toLowerCase(),
+      { reliable: true }
+    );
+
+    /*
+     * Wichtig: Daten-Listener werden VOR dem Warten auf open
+     * registriert. Dadurch wird die welcome-Nachricht nicht verpasst.
+     */
+    hostConnection.on("data", data => {
+      if (!data || typeof data !== "object") return;
+
+      if (data.type === "full") {
+        menuStatus(data.message || "Der Raum ist voll.");
+        returnToMenu();
+        return;
+      }
+
+      if (data.type === "welcome") {
+        if (!joiningSent) {
+          joiningSent = true;
+          hostConnection.send({
+            type: "join",
+            name: getName()
+          });
+        }
+        return;
+      }
+
+      if (data.type === "joined") {
+        localId = data.id;
+        roomCode = data.room || roomCode;
+
+        startGame();
+        notify("Du bist der Gruppe beigetreten.");
+        return;
+      }
+
+      if (data.type === "snapshot") {
+        applySnapshot(data.world);
+      }
+    });
+
+    hostConnection.on("open", () => {
+      connectionLabel.textContent = "Verbindung hergestellt";
+    });
+
+    hostConnection.on("close", () => {
+      if (running) {
+        connectionLabel.textContent = "Verbindung zum Host verloren";
+        notify("Die Verbindung zum Host wurde getrennt.", 6000);
+      }
+    });
+
+    hostConnection.on("error", error => {
+      console.error("Host-Verbindung:", error);
+      menuStatus("Verbindung fehlgeschlagen. Prüfe den Raumcode.");
+    });
+
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error("Host nicht erreichbar.")),
+        15000
+      );
+
+      hostConnection.on("open", () => {
+        clearTimeout(timeout);
+        resolve(true);
+      });
+
+      hostConnection.on("error", error => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+    });
+  } catch (error) {
+    console.error(error);
+    closeNetwork();
+    menuStatus(
+      "Beitritt fehlgeschlagen. Prüfe den Code und ob der Host noch spielt."
+    );
+  }
+}
+
+/* -------------------- Synchronisierung -------------------- */
+
+function removePlayer(id) {
+  world.players = world.players.filter(p => p.id !== id);
+  broadcastSnapshot();
+}
+
+function makeSnapshot() {
+  return {
+    width: world.width,
+    height: world.height,
+    level: world.level,
+
+    players: world.players.map(p => ({
+      id: p.id,
+      name: p.name,
+      x: p.x,
+      y: p.y,
+      r: p.r,
+      angle: p.angle,
+      hp: p.hp,
+      snow: p.snow,
+      alive: p.alive
+    })),
+
+    enemies: world.enemies,
+    snowballs: world.snowballs,
+    walls: world.walls,
+    houses: world.houses,
+    shots: world.shots
+  };
+}
+
+function sendSnapshotTo(conn) {
+  if (!conn || !conn.open) return;
+
+  try {
+    conn.send({
+      type: "snapshot",
+      world: makeSnapshot()
+    });
+  } catch (error) {
+    console.error("Snapshot konnte nicht gesendet werden:", error);
+  }
+}
+
+function broadcastSnapshot() {
+  if (!isHost || !online) return;
+
+  for (const conn of connections.values()) {
+    sendSnapshotTo(conn);
+  }
+}
+
+function applySnapshot(data) {
+  if (!data) return;
+
+  world.width = data.width;
+  world.height = data.height;
+  world.level = data.level;
+
+  world.players = data.players || [];
+  world.enemies = data.enemies || [];
+  world.snowballs = data.snowballs || [];
+  world.walls = data.walls || [];
+  world.houses = data.houses || [];
+  world.shots = data.shots || [];
+}
+
+function localPlayer() {
+  return world.players.find(p => p.id === localId);
+}
+
+/* -------------------- Eingaben -------------------- */
+
+function getInput(player) {
+  const dxKeys =
+    (keys.d || keys.ArrowRight ? 1 : 0) -
+    (keys.a || keys.ArrowLeft ? 1 : 0);
+
+  const dyKeys =
+    (keys.s || keys.ArrowDown ? 1 : 0) -
+    (keys.w || keys.ArrowUp ? 1 : 0);
+
+  let dx = dxKeys;
+  let dy = dyKeys;
+
+  if (Math.abs(touch.x) > 0.05 || Math.abs(touch.y) > 0.05) {
+    dx = touch.x;
+    dy = touch.y;
+  }
+
+  const length = Math.hypot(dx, dy);
+
+  if (length > 1) {
+    dx /= length;
+    dy /= length;
+  }
+
+  let aimX = mouse.x + camera.x - player.x;
+  let aimY = mouse.y + camera.y - player.y;
+  const aimLength = Math.hypot(aimX, aimY);
+
+  if (aimLength > 0.01) {
+    aimX /= aimLength;
+    aimY /= aimLength;
+  } else {
+    aimX = Math.cos(player.angle);
+    aimY = Math.sin(player.angle);
+  }
+
+  return {
+    dx,
+    dy,
+    aimX,
+    aimY,
+    shoot: mouse.down || touch.shooting || !!keys[" "],
     wall: !!keys.e,
     house: !!keys.h
   };
 }
 
-window.addEventListener("keydown", (e) => {
-  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
-  if (!keys[key]) {
-    if (key === "e") keys.e = true;
-    if (key === "h") keys.h = true;
-    if (key === "p" || key === "Escape") togglePause();
-  }
-  keys[key] = true;
-});
-
-window.addEventListener("keyup", (e) => {
-  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-  keys[key] = false;
-});
-
-canvas.addEventListener("mousemove", (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
-canvas.addEventListener("mousedown", (e) => { if (e.button === 0) mouse.down = true; });
-window.addEventListener("mouseup", (e) => { if (e.button === 0) mouse.down = false; });
-canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-
-function togglePause() {
-  if (!gameStarted || gameOver) return;
-  if (!isHost) {
-    paused = !paused;
-    connection?.send({ type: "pause", paused });
-    if (paused) showOverlay("❄️", "Pause", "Pause angefordert.", "Weiter spielen");
-    else $("overlay").classList.add("hidden");
+function sendClientInput(now) {
+  if (!online || isHost || !hostConnection || !hostConnection.open) {
     return;
   }
-  paused = !paused;
-  if (state) state.paused = paused;
-  if (connection) connection.send({ type: "pause", paused });
-  if (paused) showOverlay("❄️", "Pause", "Das Spiel ist pausiert.", "Weiter spielen");
-  else $("overlay").classList.add("hidden");
+
+  if (now - lastInputSend < 40) return;
+  lastInputSend = now;
+
+  const player = localPlayer();
+  if (!player) return;
+
+  hostConnection.send({
+    type: "input",
+    name: getName(),
+    input: getInput(player)
+  });
 }
 
-$("pauseBtn").addEventListener("click", togglePause);
-$("resumeBtn").addEventListener("click", () => {
-  if (!gameStarted) return;
-  if (!isHost) connection?.send({ type: "pause", paused: false });
-  else {
-    paused = false;
-    if (state) state.paused = false;
-    connection?.send({ type: "pause", paused: false });
+/* -------------------- Spielmechanik -------------------- */
+
+function blocked(x, y, radius) {
+  for (const wall of world.walls) {
+    if (
+      x + radius > wall.x &&
+      x - radius < wall.x + wall.w &&
+      y + radius > wall.y &&
+      y - radius < wall.y + wall.h
+    ) return true;
   }
-  paused = false;
-  $("overlay").classList.add("hidden");
-});
 
-$("menuBtn").addEventListener("click", resetSession);
-$("leaveBtn").addEventListener("click", resetSession);
+  for (const house of world.houses) {
+    if (
+      x + radius > house.x &&
+      x - radius < house.x + house.w &&
+      y + radius > house.y &&
+      y - radius < house.y + house.h
+    ) return true;
+  }
 
-function showOverlay(icon, title, text, buttonText) {
-  $("overlayIcon").textContent = icon;
-  $("overlayTitle").textContent = title;
-  $("overlayText").textContent = text;
-  $("resumeBtn").textContent = buttonText;
-  $("overlay").classList.remove("hidden");
-  if (title === "Team besiegt" || title === "Verbindung verloren") {
-    $("resumeBtn").onclick = resetSession;
+  return false;
+}
+
+function movePlayer(player, dx, dy) {
+  const nx = clamp(
+    player.x + dx,
+    player.r,
+    world.width - player.r
+  );
+
+  if (!blocked(nx, player.y, player.r)) {
+    player.x = nx;
+  }
+
+  const ny = clamp(
+    player.y + dy,
+    player.r,
+    world.height - player.r
+  );
+
+  if (!blocked(player.x, ny, player.r)) {
+    player.y = ny;
+  }
+}
+
+function buildStructure(player, type) {
+  if (!player || !player.alive) return;
+
+  const cost = type === "wall" ? 5 : 15;
+
+  if (player.snow < cost) {
+    if (player.id === localId) {
+      notify("Du brauchst " + cost + " Schneebälle.");
+    }
+    return;
+  }
+
+  const distance = 60;
+  const bx = player.x + Math.cos(player.angle) * distance;
+  const by = player.y + Math.sin(player.angle) * distance;
+
+  const structure = type === "wall"
+    ? { x: bx - 24, y: by - 8, w: 48, h: 16 }
+    : { x: bx - 28, y: by - 24, w: 56, h: 48 };
+
+  if (
+    structure.x < 0 ||
+    structure.y < 0 ||
+    structure.x + structure.w > world.width ||
+    structure.y + structure.h > world.height ||
+    blocked(bx, by, 25)
+  ) return;
+
+  if (type === "wall") {
+    world.walls.push(structure);
   } else {
-    $("resumeBtn").onclick = () => {
-      if (title === "Pause") {
-        if (!isHost) connection?.send({ type: "pause", paused: false });
-        else {
-          paused = false;
-          if (state) state.paused = false;
-          connection?.send({ type: "pause", paused: false });
-        }
-        paused = false;
-        $("overlay").classList.add("hidden");
-      } else resetSession();
-    };
+    world.houses.push(structure);
   }
+
+  player.snow -= cost;
 }
 
-function spawnWave() {
-  if (!state) return;
-  const count = Math.min(7 + state.level * 3, 70);
-  const size = state.worldSize;
-  for (let i = 0; i < count; i++) {
-    const edge = Math.floor(Math.random() * 4);
-    let x = 0, y = 0;
-    if (edge === 0) { x = Math.random() * size; y = -60; }
-    if (edge === 1) { x = size + 60; y = Math.random() * size; }
-    if (edge === 2) { x = Math.random() * size; y = size + 60; }
-    if (edge === 3) { x = -60; y = Math.random() * size; }
+function buildFromClient(type) {
+  if (!online || isHost) {
+    const player = localPlayer();
+    if (player) buildStructure(player, type);
+    return;
+  }
 
-    let type = "normal";
-    const r = Math.random();
-    if (state.level >= 2 && r > 0.78) type = "fast";
-    if (state.level >= 3 && r > 0.88) type = "shooter";
-    if (state.level >= 4 && r > 0.91) type = "tank";
-
-    const settings = {
-      normal: { hp: 2, speed: 65, damage: 12, size: 18, color: COLORS.enemy },
-      fast: { hp: 1, speed: 125, damage: 8, size: 14, color: COLORS.fast },
-      tank: { hp: 7, speed: 37, damage: 20, size: 27, color: COLORS.tank },
-      shooter: { hp: 3, speed: 48, damage: 10, size: 18, color: COLORS.shooter }
-    }[type];
-
-    state.enemies.push({
-      id: ++state.enemyId, x, y, type, ...settings,
-      maxHp: settings.hp, shootCooldown: 1 + Math.random() * 2
+  if (hostConnection && hostConnection.open) {
+    hostConnection.send({
+      type: "build",
+      building: type
     });
   }
-  state.nextEnemy = 0;
 }
 
-function spawnDrop(x, y, amount) {
-  state.drops.push({ id: ++state.dropId, x, y, amount, bob: Math.random() * 6 });
-}
+function shoot(player, now) {
+  if (now - player.lastShot < 380) return;
 
-function shootSnowball(p) {
-  if (p.shootCooldown > 0 || !p.alive) return;
-  p.shootCooldown = Math.max(0.17, 0.42 - state.level * 0.008);
-  state.bullets.push({
-    id: ++state.bulletId,
-    x: p.x + Math.cos(p.angle) * 18,
-    y: p.y + Math.sin(p.angle) * 18,
-    vx: Math.cos(p.angle) * 560,
-    vy: Math.sin(p.angle) * 560,
-    owner: p.id,
+  player.lastShot = now;
+
+  const vx = Math.cos(player.angle);
+  const vy = Math.sin(player.angle);
+
+  world.shots.push({
+    x: player.x + vx * 24,
+    y: player.y + vy * 24,
+    vx: vx * 510,
+    vy: vy * 510,
+    owner: player.id,
     life: 1.5,
-    damage: 1
+    r: 6
   });
 }
 
-function buildFor(p, type) {
-  if (p.buildCooldown > 0 || !p.alive) return;
-  const cost = type === "house" ? 35 : 10;
-  if (p.snow < cost) {
-    if (p.id === localId) showMessage("Nicht genug Schneebälle!");
-    return;
-  }
-
-  const size = type === "house" ? 52 : 44;
-  const x = Math.round((p.x + Math.cos(p.angle) * 60) / 44) * 44;
-  const y = Math.round((p.y + Math.sin(p.angle) * 60) / 44) * 44;
-
-  if (x < 0 || y < 0 || x > state.worldSize || y > state.worldSize) return;
-  if (state.buildings.some(b => Math.hypot(b.x - x, b.y - y) < (b.size + size) * 0.6)) {
-    if (p.id === localId) showMessage("Hier ist schon ein Gebäude!");
-    return;
-  }
-  p.snow -= cost;
-  p.buildCooldown = 0.3;
-  state.buildings.push({
-    id: ++state.buildingId, x, y, size,
-    type, hp: type === "house" ? 18 : 9
-  });
-  if (p.id === localId) showMessage(type === "house" ? "Schneehaus gebaut!" : "Schneewand gebaut!");
+function dropSnow(x, y, amount = 3) {
+  world.snowballs.push({ x, y, amount, r: 8 });
 }
 
-function updateWorld(dt) {
-  if (!state || !state.started || state.paused || state.over) return;
-  state.time += dt;
-  const players = Object.values(state.players);
-  const livePlayers = players.filter(p => p.alive);
+function spawnEnemy() {
+  const side = Math.floor(Math.random() * 4);
+  let x;
+  let y;
 
-  if (livePlayers.length === 0) {
-    state.over = true;
-    gameOver = true;
-    if (connection) connection.send({ type: "notice", text: "Euer Team wurde besiegt." });
-    return;
+  if (side === 0) {
+    x = random(0, world.width);
+    y = 20;
+  } else if (side === 1) {
+    x = world.width - 20;
+    y = random(0, world.height);
+  } else if (side === 2) {
+    x = random(0, world.width);
+    y = world.height - 20;
+  } else {
+    x = 20;
+    y = random(0, world.height);
   }
 
-  for (const p of players) {
-    if (!p.alive) continue;
-    const i = p.input;
-    let dx = (i.right ? 1 : 0) - (i.left ? 1 : 0);
-    let dy = (i.down ? 1 : 0) - (i.up ? 1 : 0);
-    const len = Math.hypot(dx, dy);
-    if (len > 0) { dx /= len; dy /= len; }
+  const hp = 35 + world.level * 9;
 
-    p.x += dx * p.speed * dt;
-    p.y += dy * p.speed * dt;
-    p.x = Math.max(20, Math.min(state.worldSize - 20, p.x));
-    p.y = Math.max(20, Math.min(state.worldSize - 20, p.y));
-    p.angle = i.angle;
-    p.shootCooldown = Math.max(0, p.shootCooldown - dt);
-    p.buildCooldown = Math.max(0, p.buildCooldown - dt);
-    p.invincible = Math.max(0, p.invincible - dt);
+  world.enemies.push({
+    id: "enemy-" + enemyId++,
+    x,
+    y,
+    r: 16 + Math.min(world.level, 6),
+    hp,
+    maxHp: hp,
+    speed: 45 + world.level * 4
+  });
+}
 
-    if (i.shoot) shootSnowball(p);
-    if (i.wall) { buildFor(p, "wall"); p.input.wall = false; }
-    if (i.house) { buildFor(p, "house"); p.input.house = false; }
+function updateHost(dt, now) {
+  if (!isHost || gameOver) return;
+
+  for (const player of world.players) {
+    if (!player.alive) continue;
+
+    const input = player.isLocal
+      ? getInput(player)
+      : player.input;
+
+    player.input = input;
+
+    if (Math.hypot(input.aimX, input.aimY) > 0.05) {
+      player.angle = Math.atan2(input.aimY, input.aimX);
+    } else if (Math.hypot(input.dx, input.dy) > 0.05) {
+      player.angle = Math.atan2(input.dy, input.dx);
+    }
+
+    movePlayer(
+      player,
+      input.dx * player.speed * dt,
+      input.dy * player.speed * dt
+    );
+
+    if (input.shoot) shoot(player, now);
+
+    if (input.wall && now - player.lastWall > 450) {
+      player.lastWall = now;
+      buildStructure(player, "wall");
+    }
+
+    if (input.house && now - player.lastHouse > 450) {
+      player.lastHouse = now;
+      buildStructure(player, "house");
+    }
+
+    for (const drop of world.snowballs) {
+      if (
+        drop.amount > 0 &&
+        Math.hypot(player.x - drop.x, player.y - drop.y) <
+          player.r + drop.r + 4
+      ) {
+        player.snow += drop.amount;
+        drop.amount = 0;
+      }
+    }
   }
 
-  // Gegner suchen den nächsten lebenden Spieler.
-  for (const e of state.enemies) {
-    const target = livePlayers.reduce((best, p) =>
-      !best || Math.hypot(p.x - e.x, p.y - e.y) < Math.hypot(best.x - e.x, best.y - e.y)
-        ? p : best, null);
+  world.snowballs = world.snowballs.filter(d => d.amount > 0);
+
+  const spawnInterval = Math.max(400, 1800 - world.level * 90);
+
+  if (now - lastSpawn > spawnInterval) {
+    lastSpawn = now;
+
+    const count = Math.min(1 + Math.floor(world.level / 3), 4);
+
+    for (let i = 0; i < count; i++) {
+      spawnEnemy();
+    }
+  }
+
+  for (const enemy of world.enemies) {
+    let target = null;
+    let nearest = Infinity;
+
+    for (const player of world.players) {
+      if (!player.alive) continue;
+
+      const distance = Math.hypot(
+        player.x - enemy.x,
+        player.y - enemy.y
+      );
+
+      if (distance < nearest) {
+        nearest = distance;
+        target = player;
+      }
+    }
+
     if (!target) continue;
 
-    const dx = target.x - e.x, dy = target.y - e.y;
-    const dist = Math.max(1, Math.hypot(dx, dy));
+    const dx = target.x - enemy.x;
+    const dy = target.y - enemy.y;
+    const length = Math.hypot(dx, dy) || 1;
 
-    if (e.type === "shooter") {
-      if (dist > 240) {
-        e.x += dx / dist * e.speed * dt;
-        e.y += dy / dist * e.speed * dt;
-      }
-      e.shootCooldown -= dt;
-      if (e.shootCooldown <= 0 && dist < 550) {
-        e.shootCooldown = Math.max(0.65, 1.7 - state.level * 0.05);
-        state.enemyBullets.push({
-          x: e.x, y: e.y,
-          vx: dx / dist * (250 + state.level * 5),
-          vy: dy / dist * (250 + state.level * 5),
-          life: 3, damage: e.damage
-        });
-      }
-    } else {
-      e.x += dx / dist * e.speed * (1 + state.level * 0.04) * dt;
-      e.y += dy / dist * e.speed * (1 + state.level * 0.04) * dt;
+    const nx = enemy.x + dx / length * enemy.speed * dt;
+    const ny = enemy.y + dy / length * enemy.speed * dt;
+
+    if (!blocked(nx, ny, enemy.r)) {
+      enemy.x = nx;
+      enemy.y = ny;
     }
 
-    // Gebäude blockieren Gegner.
-    for (const b of state.buildings) {
-      if (Math.hypot(e.x - b.x, e.y - b.y) < b.size * 0.65 + e.size * 0.4) {
-        e.x -= dx / dist * e.speed * dt * 1.8;
-        e.y -= dy / dist * e.speed * dt * 1.8;
-        b.hp -= dt * 0.25;
-      }
-    }
+    if (
+      Math.hypot(target.x - enemy.x, target.y - enemy.y) <
+      enemy.r + target.r
+    ) {
+      target.hp -= 24 * dt;
 
-    if (dist < e.size + 18 && target.invincible <= 0) {
-      target.hp -= e.damage * dt;
       if (target.hp <= 0) {
         target.hp = 0;
         target.alive = false;
-        if (target.id === localId) showMessage("Du wurdest eingefroren!");
+        dropSnow(target.x, target.y, 8);
       }
     }
   }
 
-  state.buildings = state.buildings.filter(b => b.hp > 0);
+  for (const shot of world.shots) {
+    shot.x += shot.vx * dt;
+    shot.y += shot.vy * dt;
+    shot.life -= dt;
 
-  for (const b of state.bullets) {
-    b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
-    for (const e of state.enemies) {
-      if (e.hp <= 0) continue;
-      if (Math.hypot(e.x - b.x, e.y - b.y) < e.size + 5) {
-        e.hp -= b.damage;
-        b.life = 0;
-        if (e.hp <= 0) {
-          const owner = state.players[b.owner];
-          if (owner) owner.kills++;
-          state.kills++;
-          spawnDrop(e.x, e.y, 3 + Math.floor(Math.random() * 4));
+    for (const enemy of world.enemies) {
+      if (enemy.hp <= 0) continue;
+
+      if (
+        Math.hypot(shot.x - enemy.x, shot.y - enemy.y) <
+        shot.r + enemy.r
+      ) {
+        enemy.hp -= 25;
+        shot.life = 0;
+
+        if (enemy.hp <= 0) {
+          dropSnow(
+            enemy.x,
+            enemy.y,
+            3 + Math.floor(Math.random() * 4)
+          );
         }
+
         break;
       }
     }
-    if (state.buildings.some(w => Math.hypot(w.x - b.x, w.y - b.y) < w.size * 0.6)) b.life = 0;
   }
-  state.bullets = state.bullets.filter(b => b.life > 0);
 
-  for (const b of state.enemyBullets) {
-    b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
-    for (const p of livePlayers) {
-      if (Math.hypot(p.x - b.x, p.y - b.y) < 18) {
-        if (p.invincible <= 0) {
-          p.hp -= b.damage;
-          p.invincible = 0.25;
-          if (p.hp <= 0) { p.hp = 0; p.alive = false; }
-        }
-        b.life = 0;
-      }
+  world.shots = world.shots.filter(shot =>
+    shot.life > 0 &&
+    shot.x >= 0 &&
+    shot.y >= 0 &&
+    shot.x <= world.width &&
+    shot.y <= world.height
+  );
+
+  world.enemies = world.enemies.filter(enemy => enemy.hp > 0);
+
+  if (world.enemies.length === 0 && now - lastSpawn > 1800) {
+    world.level++;
+    world.width += 350;
+    world.height += 250;
+
+    for (const player of world.players) {
+      if (player.alive) player.snow += 5;
     }
-    if (state.buildings.some(w => Math.hypot(w.x - b.x, w.y - b.y) < w.size * 0.6)) b.life = 0;
-  }
-  state.enemyBullets = state.enemyBullets.filter(b => b.life > 0);
 
-  for (const d of state.drops) {
-    d.bob += dt * 4;
-    for (const p of livePlayers) {
-      if (Math.hypot(p.x - d.x, p.y - d.y) < 28) {
-        p.snow += d.amount;
-        d.amount = 0;
-        if (p.id === localId) showMessage("+" + d.amount + " Schneebälle");
-      }
-    }
-  }
-  state.drops = state.drops.filter(d => d.amount > 0);
-
-  state.enemies = state.enemies.filter(e => e.hp > 0);
-  state.nextEnemy -= dt;
-  if (state.nextEnemy <= 0) {
-    const spawnCount = Math.min(1 + Math.floor(state.level / 3), 5);
-    for (let i = 0; i < spawnCount; i++) spawnWaveEnemy();
-    state.nextEnemy = Math.max(0.4, 2.4 - state.level * 0.09);
+    notify("Level " + world.level + " erreicht!");
   }
 
-  if (state.kills >= state.needed) {
-    state.level++;
-    state.needed += 12 + state.level * 4;
-    state.worldSize += 420;
-    for (const p of players) {
-      p.hp = Math.min(100, p.hp + 25);
-      p.snow += 12;
-    }
-    spawnWave();
-    if (connection) connection.send({ type: "notice", text: "LEVEL " + state.level + "! Die Karte ist größer und die Gegner sind stärker!" });
+  if (
+    world.players.length > 0 &&
+    world.players.every(player => !player.alive)
+  ) {
+    gameOver = true;
+    notify("Game Over!", 100000);
   }
 }
 
-function spawnWaveEnemy() {
-  const p = state.players.p1;
-  if (!p) return;
-  const edge = Math.floor(Math.random() * 4);
-  let x = 0, y = 0;
-  if (edge === 0) { x = Math.random() * state.worldSize; y = 0; }
-  if (edge === 1) { x = state.worldSize; y = Math.random() * state.worldSize; }
-  if (edge === 2) { x = Math.random() * state.worldSize; y = state.worldSize; }
-  if (edge === 3) { x = 0; y = Math.random() * state.worldSize; }
+/* -------------------- Kamera und Darstellung -------------------- */
 
-  const r = Math.random();
-  let type = "normal";
-  if (state.level >= 2 && r > 0.72) type = "fast";
-  if (state.level >= 3 && r > 0.83) type = "shooter";
-  if (state.level >= 4 && r > 0.9) type = "tank";
+function updateCamera() {
+  const player = localPlayer();
+  if (!player) return;
 
-  const stats = {
-    normal: [2, 65, 12, 18, COLORS.enemy],
-    fast: [1, 125, 8, 14, COLORS.fast],
-    shooter: [3, 48, 10, 18, COLORS.shooter],
-    tank: [7, 37, 20, 27, COLORS.tank]
-  }[type];
+  camera.x = clamp(
+    player.x - VIEW_W / 2,
+    0,
+    Math.max(0, world.width - VIEW_W)
+  );
 
-  state.enemies.push({
-    id: ++state.enemyId, x, y, type,
-    hp: stats[0], maxHp: stats[0],
-    speed: stats[1], damage: stats[2],
-    size: stats[3], color: stats[4],
-    shootCooldown: 1.2 + Math.random() * 2
-  });
+  camera.y = clamp(
+    player.y - VIEW_H / 2,
+    0,
+    Math.max(0, world.height - VIEW_H)
+  );
 }
 
-function sendLocalInput() {
-  if (!gameStarted || !state || gameOver || paused) return;
-  const input = getLocalInput();
+function drawGround() {
+  ctx.fillStyle = "#d8edf0";
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 
-  if (isHost) {
-    const p = state.players.p1;
-    if (!p) return;
-    p.input.up = input.up;
-    p.input.down = input.down;
-    p.input.left = input.left;
-    p.input.right = input.right;
-    p.input.shoot = input.shoot;
-    p.input.angle = input.angle;
+  ctx.strokeStyle = "#c5e0e5";
+  ctx.lineWidth = 1;
 
-    // Baubefehle werden nur einmal pro Tastendruck ausgelöst.
-    p.input.wall = !!keys.e && !previousKeys.e;
-    p.input.house = !!keys.h && !previousKeys.h;
-    previousKeys.e = !!keys.e;
-    previousKeys.h = !!keys.h;
-  } else if (connection && connection.open) {
-    connection.send({ type: "input", input });
+  const grid = 80;
+
+  for (let x = -(camera.x % grid); x < VIEW_W; x += grid) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, VIEW_H);
+    ctx.stroke();
+  }
+
+  for (let y = -(camera.y % grid); y < VIEW_H; y += grid) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(VIEW_W, y);
+    ctx.stroke();
   }
 }
 
-function updateHUD() {
-  if (!state) return;
-  const p = state.players[localId];
-  $("level").textContent = state.level;
-  $("mapSize").textContent = Math.round(state.worldSize / 1800) + "×";
-  $("enemyCount").textContent = state.enemies.length;
-  $("snow").textContent = p ? p.snow : 0;
-  $("progressText").textContent = state.kills + " / " + state.needed;
-  $("progressBar").style.width = Math.min(100, state.kills / state.needed * 100) + "%";
-  $("difficultyText").textContent = "Schwierigkeit: " + ["Leicht", "Normal", "Hart", "Sehr hart", "Extrem"][Math.min(4, Math.floor((state.level - 1) / 2))];
+function drawPlayer(player) {
+  const x = player.x - camera.x;
+  const y = player.y - camera.y;
 
-  $("playersList").innerHTML = Object.values(state.players).map(pl => `
-    <div class="player-line">
-      <div class="player-avatar">${pl.id === "p1" ? "🐧" : "🐧"}</div>
-      <div class="player-info">
-        <strong>${escapeHTML(pl.name)}${pl.id === localId ? " (Du)" : ""}</strong>
-        <small>${pl.alive ? "♥ " + Math.ceil(pl.hp) + "% Leben · " + pl.kills + " Kills" : "Eingefroren"}</small>
-      </div>
-    </div>
-  `).join("");
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(player.angle);
 
-  $("connectionText").textContent = connected ? "Gruppe verbunden" : "Nur lokal";
-}
+  // Pinguinkörper
+  ctx.fillStyle = player.alive ? "#202b35" : "#737e83";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 18, 22, 0, 0, Math.PI * 2);
+  ctx.fill();
 
-function escapeHTML(s) {
-  return String(s).replace(/[&<>"']/g, c => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[c]));
+  // Bauch
+  ctx.fillStyle = "#f5f7f5";
+  ctx.beginPath();
+  ctx.ellipse(3, 5, 10, 13, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Schnabel zeigt in Blickrichtung
+  ctx.fillStyle = "#f7a83e";
+  ctx.beginPath();
+  ctx.moveTo(12, -4);
+  ctx.lineTo(26, 0);
+  ctx.lineTo(12, 5);
+  ctx.closePath();
+  ctx.fill();
+
+  // Auge
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(7, -8, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#111";
+  ctx.beginPath();
+  ctx.arc(8, -8, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+
+  ctx.textAlign = "center";
+  ctx.font = "12px Arial";
+  ctx.fillStyle = "#10202a";
+  ctx.fillText(player.name, x, y - 30);
+
+  ctx.fillStyle = "#9b3434";
+  ctx.fillRect(x - 19, y + 27, 38, 5);
+
+  ctx.fillStyle = "#62d46b";
+  ctx.fillRect(
+    x - 19,
+    y + 27,
+    38 * clamp(player.hp / 100, 0, 1),
+    5
+  );
+
+  if (!player.alive) {
+    ctx.fillStyle = "#9b3434";
+    ctx.fillText("KO", x, y + 45);
+  }
 }
 
 function drawWorld() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = COLORS.ground;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  if (!state) {
-    ctx.fillStyle = "#214755";
-    ctx.font = "bold 24px system-ui";
-    ctx.fillText("Erstelle eine Gruppe oder tritt bei.", 35, 55);
-    return;
+  drawGround();
+
+  ctx.strokeStyle = "#6e9ca8";
+  ctx.lineWidth = 5;
+  ctx.strokeRect(
+    -camera.x,
+    -camera.y,
+    world.width,
+    world.height
+  );
+
+  for (const house of world.houses) {
+    const x = house.x - camera.x;
+    const y = house.y - camera.y;
+
+    ctx.fillStyle = "#a9784e";
+    ctx.fillRect(x, y, house.w, house.h);
+
+    ctx.fillStyle = "#6d4831";
+    ctx.beginPath();
+    ctx.moveTo(x - 5, y + 4);
+    ctx.lineTo(x + house.w / 2, y - 14);
+    ctx.lineTo(x + house.w + 5, y + 4);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#bfe9f2";
+    ctx.fillRect(
+      x + house.w * 0.62,
+      y + house.h * 0.35,
+      10,
+      12
+    );
   }
 
-  const cam = getCamera();
-  const sx = (x) => x - cam.x;
-  const sy = (y) => y - cam.y;
+  for (const wall of world.walls) {
+    ctx.fillStyle = "#79a5b1";
+    ctx.fillRect(
+      wall.x - camera.x,
+      wall.y - camera.y,
+      wall.w,
+      wall.h
+    );
 
-  // Raster macht die Erkundung der Welt sichtbar.
-  const grid = 44;
-  const startX = Math.floor(cam.x / grid) * grid;
-  const startY = Math.floor(cam.y / grid) * grid;
-  ctx.strokeStyle = COLORS.grid;
-  ctx.lineWidth = 1;
-  for (let x = startX; x < cam.x + canvas.width + grid; x += grid) {
-    for (let y = startY; y < cam.y + canvas.height + grid; y += grid) {
-      if (x < 0 || y < 0 || x > state.worldSize || y > state.worldSize) continue;
-      ctx.strokeRect(sx(x), sy(y), grid, grid);
-    }
+    ctx.strokeStyle = "#4c7885";
+    ctx.strokeRect(
+      wall.x - camera.x,
+      wall.y - camera.y,
+      wall.w,
+      wall.h
+    );
   }
 
-  // Grenzen der derzeit erkundbaren Karte.
-  ctx.strokeStyle = "#557e8c";
-  ctx.lineWidth = 6;
-  ctx.strokeRect(sx(0), sy(0), state.worldSize, state.worldSize);
-
-  // Schneeball-Drops.
-  for (const d of state.drops) {
-    const x = sx(d.x), y = sy(d.y + Math.sin(d.bob) * 4);
-    ctx.fillStyle = "#f8ffff";
-    ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = "#68b7d0"; ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = "#234d5d"; ctx.font = "bold 10px system-ui";
-    ctx.fillText("+" + d.amount, x + 10, y - 8);
-  }
-
-  // Gebäude.
-  for (const b of state.buildings) {
-    const x = sx(b.x), y = sy(b.y), s = b.size;
-    if (b.type === "wall") {
-      ctx.fillStyle = "#eaf7fa";
-      ctx.fillRect(x - s / 2, y - s / 2, s, s);
-      ctx.strokeStyle = "#8db8c7"; ctx.lineWidth = 3;
-      ctx.strokeRect(x - s / 2, y - s / 2, s, s);
-      ctx.strokeStyle = "#c1e0e7"; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(x - s / 2, y); ctx.lineTo(x + s / 2, y); ctx.stroke();
-    } else {
-      ctx.fillStyle = "#e6f1ee";
-      ctx.fillRect(x - s / 2, y - s / 2, s, s);
-      ctx.strokeStyle = "#8db8c7"; ctx.lineWidth = 3;
-      ctx.strokeRect(x - s / 2, y - s / 2, s, s);
-      ctx.fillStyle = "#6b9fb1";
-      ctx.beginPath(); ctx.moveTo(x - s / 2 - 5, y - s / 2); ctx.lineTo(x, y - s / 2 - 24); ctx.lineTo(x + s / 2 + 5, y - s / 2); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = "#7ba8b5"; ctx.fillRect(x - 7, y + 2, 14, 24);
-    }
-    ctx.fillStyle = "#3a5966";
-    ctx.fillRect(x - s / 2, y + s / 2 + 5, s, 3);
-    ctx.fillStyle = "#7be2a0";
-    ctx.fillRect(x - s / 2, y + s / 2 + 5, s * Math.max(0, b.hp / (b.type === "house" ? 18 : 9)), 3);
-  }
-
-  // Gegner.
-  for (const e of state.enemies) {
-    const x = sx(e.x), y = sy(e.y);
-    ctx.fillStyle = e.color;
-    ctx.beginPath(); ctx.arc(x, y, e.size, 0, Math.PI * 2); ctx.fill();
+  for (const drop of world.snowballs) {
     ctx.fillStyle = "#fff";
-    ctx.beginPath(); ctx.arc(x - 5, y - 3, 3, 0, Math.PI * 2); ctx.arc(x + 5, y - 3, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#263a45";
-    ctx.beginPath(); ctx.arc(x - 5, y - 3, 1.5, 0, Math.PI * 2); ctx.arc(x + 5, y - 3, 1.5, 0, Math.PI * 2); ctx.fill();
-    if (e.hp < e.maxHp) {
-      ctx.fillStyle = "#4b3434"; ctx.fillRect(x - e.size, y - e.size - 9, e.size * 2, 4);
-      ctx.fillStyle = "#7be2a0"; ctx.fillRect(x - e.size, y - e.size - 9, e.size * 2 * e.hp / e.maxHp, 4);
-    }
+    ctx.beginPath();
+    ctx.arc(
+      drop.x - camera.x,
+      drop.y - camera.y,
+      drop.r,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    ctx.strokeStyle = "#86b6c6";
+    ctx.stroke();
   }
 
-  // Feindliche Projektile.
-  ctx.fillStyle = "#f2a95c";
-  for (const b of state.enemyBullets) {
-    ctx.beginPath(); ctx.arc(sx(b.x), sy(b.y), 6, 0, Math.PI * 2); ctx.fill();
-  }
-
-  // Eigene Schneebälle.
-  ctx.fillStyle = "#ffffff";
-  for (const b of state.bullets) {
-    ctx.beginPath(); ctx.arc(sx(b.x), sy(b.y), 5, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = "#a5d9e6"; ctx.lineWidth = 1; ctx.stroke();
-  }
-
-  // Pinguine.
-  for (const p of Object.values(state.players)) {
-    const x = sx(p.x), y = sy(p.y);
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(p.angle);
-    ctx.fillStyle = "#19313e";
-    ctx.beginPath(); ctx.ellipse(0, 0, 15, 19, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#f2f8f7";
-    ctx.beginPath(); ctx.ellipse(2, 3, 9, 12, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#f4b64f";
-    ctx.beginPath(); ctx.moveTo(12, -3); ctx.lineTo(23, 0); ctx.lineTo(12, 4); ctx.closePath(); ctx.fill();
+  for (const shot of world.shots) {
     ctx.fillStyle = "#fff";
-    ctx.beginPath(); ctx.arc(5, -7, 4, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#172a35";
-    ctx.beginPath(); ctx.arc(6, -7, 2, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(
+      shot.x - camera.x,
+      shot.y - camera.y,
+      shot.r,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+  }
 
-    // Spielername und Lebensbalken.
+  for (const enemy of world.enemies) {
+    const x = enemy.x - camera.x;
+    const y = enemy.y - camera.y;
+
+    ctx.fillStyle = "#c74343";
+    ctx.beginPath();
+    ctx.arc(x, y, enemy.r, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(x - 5, y - 4, 3, 0, Math.PI * 2);
+    ctx.arc(x + 5, y - 4, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#542020";
+    ctx.fillRect(x - 18, y - enemy.r - 10, 36, 4);
+
+    ctx.fillStyle = "#ff7474";
+    ctx.fillRect(
+      x - 18,
+      y - enemy.r - 10,
+      36 * clamp(enemy.hp / enemy.maxHp, 0, 1),
+      4
+    );
+  }
+
+  for (const player of world.players) {
+    drawPlayer(player);
+  }
+
+  if (gameOver) {
+    ctx.fillStyle = "#08131bd9";
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+
     ctx.textAlign = "center";
-    ctx.font = "bold 11px system-ui";
-    ctx.fillStyle = "#183540";
-    ctx.fillText(p.name + (p.id === localId ? " (Du)" : ""), x, y - 32);
-    ctx.fillStyle = "#5a4545"; ctx.fillRect(x - 20, y - 27, 40, 4);
-    ctx.fillStyle = p.hp > 35 ? "#48b887" : "#e76e6e";
-    ctx.fillRect(x - 20, y - 27, 40 * p.hp / 100, 4);
-    if (!p.alive) {
-      ctx.fillStyle = "#7b2020";
-      ctx.font = "bold 12px system-ui";
-      ctx.fillText("EINGEFROREN", x, y - 40);
-    }
+    ctx.fillStyle = "#ff7b72";
+    ctx.font = "bold 48px Arial";
+    ctx.fillText("GAME OVER", VIEW_W / 2, VIEW_H / 2);
   }
-
-  // Anzeige der Kartengrenzen und Erkundungsgröße.
-  ctx.textAlign = "left";
-  ctx.fillStyle = "#234c5b";
-  ctx.font = "bold 11px system-ui";
-  ctx.fillText("ERKUNDE DIE SCHNEEWELT", 14, 22);
-  ctx.font = "10px system-ui";
-  ctx.fillText("Karte: " + state.worldSize + " × " + state.worldSize, 14, 38);
 }
 
-function frame(now) {
-  const dt = Math.min(0.04, (now - lastFrame) / 1000 || 0);
+function drawMinimap() {
+  const w = mini.width;
+  const h = mini.height;
+
+  mctx.fillStyle = "#d8edf0";
+  mctx.fillRect(0, 0, w, h);
+
+  const sx = w / world.width;
+  const sy = h / world.height;
+
+  mctx.fillStyle = "#a9784e";
+
+  for (const house of world.houses) {
+    mctx.fillRect(
+      house.x * sx,
+      house.y * sy,
+      Math.max(2, house.w * sx),
+      Math.max(2, house.h * sy)
+    );
+  }
+
+  mctx.fillStyle = "#719daa";
+
+  for (const wall of world.walls) {
+    mctx.fillRect(
+      wall.x * sx,
+      wall.y * sy,
+      Math.max(2, wall.w * sx),
+      Math.max(2, wall.h * sy)
+    );
+  }
+
+  mctx.fillStyle = "#c74343";
+
+  for (const enemy of world.enemies) {
+    mctx.beginPath();
+    mctx.arc(enemy.x * sx, enemy.y * sy, 2.4, 0, Math.PI * 2);
+    mctx.fill();
+  }
+
+  for (const player of world.players) {
+    mctx.fillStyle = player.id === localId ? "#25821f" : "#1673bd";
+    mctx.beginPath();
+    mctx.arc(player.x * sx, player.y * sy, 3.5, 0, Math.PI * 2);
+    mctx.fill();
+  }
+
+  mctx.strokeStyle = "#375b68";
+  mctx.strokeRect(0, 0, w, h);
+}
+
+function updateUI(now) {
+  const player = localPlayer();
+
+  levelStat.textContent = world.level;
+  snowStat.textContent = player ? player.snow : 0;
+  playersStat.textContent = world.players.length + "/" + MAX_PLAYERS;
+  enemiesStat.textContent = world.enemies.length;
+
+  playerList.replaceChildren();
+
+  for (const p of world.players) {
+    const item = document.createElement("li");
+    item.textContent =
+      p.name +
+      (p.id === localId ? " (Du)" : "") +
+      (!p.alive ? " – KO" : "");
+
+    playerList.appendChild(item);
+  }
+
+  if (noticeUntil && now > noticeUntil && !gameOver) {
+    notice.textContent = "";
+    noticeUntil = 0;
+  }
+}
+
+/* -------------------- Hauptschleife -------------------- */
+
+function gameLoop(now) {
+  if (!running) return;
+
+  const dt = Math.min(
+    0.04,
+    Math.max(0, (now - lastFrame) / 1000)
+  );
+
   lastFrame = now;
 
-  if (gameStarted && state && !gameOver) {
-    if (isHost) {
-      sendLocalInput();
-      if (!paused) updateWorld(dt);
+  if (isHost) {
+    updateHost(dt, now);
 
-      if (connection && connection.open && now - lastSnapshot > 65) {
-        connection.send({ type: "snapshot", state });
-        lastSnapshot = now;
-      }
-    } else if (now - lastSentInput > 45) {
-      sendLocalInput();
-      lastSentInput = now;
+    if (online && now - lastSnapshot >= 60) {
+      lastSnapshot = now;
+      broadcastSnapshot();
     }
+  } else {
+    sendClientInput(now);
   }
 
+  updateCamera();
   drawWorld();
-  if (state) updateHUD();
-  requestAnimationFrame(frame);
+  drawMinimap();
+  updateUI(now);
+
+  requestAnimationFrame(gameLoop);
 }
 
-requestAnimationFrame(frame);
+/* -------------------- Tastatur und Maus -------------------- */
+
+window.addEventListener("keydown", event => {
+  const key = event.key.length === 1
+    ? event.key.toLowerCase()
+    : event.key;
+
+  keys[key] = true;
+
+  if (
+    ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "]
+      .includes(event.key)
+  ) {
+    event.preventDefault();
+  }
+});
+
+window.addEventListener("keyup", event => {
+  const key = event.key.length === 1
+    ? event.key.toLowerCase()
+    : event.key;
+
+  keys[key] = false;
+});
+
+canvas.addEventListener("mousemove", event => {
+  const rect = canvas.getBoundingClientRect();
+
+  mouse.x = (event.clientX - rect.left) * VIEW_W / rect.width;
+  mouse.y = (event.clientY - rect.top) * VIEW_H / rect.height;
+});
+
+canvas.addEventListener("mousedown", event => {
+  if (event.button === 0) mouse.down = true;
+});
+
+window.addEventListener("mouseup", () => {
+  mouse.down = false;
+});
+
+canvas.addEventListener("contextmenu", event => {
+  event.preventDefault();
+});
+
+/* -------------------- Mobile-Steuerung -------------------- */
+
+const joystick = document.getElementById("joystick");
+const stick = document.getElementById("stick");
+
+let joystickPointer = null;
+
+function setStick(event) {
+  const rect = joystick.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const max = rect.width * 0.34;
+
+  let dx = event.clientX - cx;
+  let dy = event.clientY - cy;
+  const length = Math.hypot(dx, dy);
+
+  if (length > max) {
+    dx = dx / length * max;
+    dy = dy / length * max;
+  }
+
+  touch.x = dx / max;
+  touch.y = dy / max;
+
+  stick.style.left = (rect.width / 2 - 24 + dx) + "px";
+  stick.style.top = (rect.height / 2 - 24 + dy) + "px";
+}
+
+function releaseJoystick() {
+  joystickPointer = null;
+  touch.x = 0;
+  touch.y = 0;
+  stick.style.left = "calc(50% - 24px)";
+  stick.style.top = "calc(50% - 24px)";
+}
+
+joystick.addEventListener("pointerdown", event => {
+  joystickPointer = event.pointerId;
+  joystick.setPointerCapture(event.pointerId);
+  setStick(event);
+});
+
+joystick.addEventListener("pointermove", event => {
+  if (event.pointerId === joystickPointer) {
+    setStick(event);
+  }
+});
+
+joystick.addEventListener("pointerup", releaseJoystick);
+joystick.addEventListener("pointercancel", releaseJoystick);
+joystick.addEventListener("lostpointercapture", releaseJoystick);
+
+const shootBtn = document.getElementById("shootBtn");
+
+shootBtn.addEventListener("pointerdown", event => {
+  event.preventDefault();
+  touch.shooting = true;
+  shootBtn.setPointerCapture(event.pointerId);
+});
+
+shootBtn.addEventListener("pointerup", () => {
+  touch.shooting = false;
+});
+
+shootBtn.addEventListener("pointercancel", () => {
+  touch.shooting = false;
+});
+
+shootBtn.addEventListener("lostpointercapture", () => {
+  touch.shooting = false;
+});
+
+/* -------------------- Buttons -------------------- */
+
+document.getElementById("wallBtn").addEventListener("click", () => {
+  buildFromClient("wall");
+});
+
+document.getElementById("houseBtn").addEventListener("click", () => {
+  buildFromClient("house");
+});
+
+document.getElementById("mobileWallBtn").addEventListener("click", () => {
+  buildFromClient("wall");
+});
+
+document.getElementById("mobileHouseBtn").addEventListener("click", () => {
+  buildFromClient("house");
+});
+
+document.getElementById("soloBtn").addEventListener("click", () => {
+  closeNetwork();
+  resetWorld();
+
+  isHost = true;
+  online = false;
+  localId = makeId("solo-");
+
+  world.players.push(
+    makePlayer(localId, getName(), 220, 220, true)
+  );
+
+  startGame();
+});
+
+document.getElementById("createBtn").addEventListener("click", createOnlineRoom);
+document.getElementById("joinBtn").addEventListener("click", joinOnlineRoom);
+document.getElementById("leaveBtn").addEventListener("click", returnToMenu);
+
+roomInput.addEventListener("keydown", event => {
+  if (event.key === "Enter") joinOnlineRoom();
+});
+
+window.addEventListener("beforeunload", () => {
+  if (hostConnection && hostConnection.open) {
+    try {
+      hostConnection.send({ type: "leave" });
+    } catch (_) {}
+  }
+
+  closeNetwork();
+});
