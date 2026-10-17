@@ -1499,7 +1499,20 @@ function setPaused(value) {
   if(pauseBtn)pauseBtn.textContent=paused?"Fortsetzen":"Pause";
   if(paused){touch.x=0;touch.y=0;touch.shooting=false;mouse.down=false;for(const k of Object.keys(keys))keys[k]=false;}
 }
-if(pauseBtn)pauseBtn.addEventListener("click",()=>setPaused(!paused));
+function bindTap(button, action) {
+  if (!button) return;
+  let lastPointerAction = 0;
+  button.addEventListener("pointerup", event => {
+    lastPointerAction = performance.now();
+    event.preventDefault();
+    action();
+  });
+  button.addEventListener("click", () => {
+    // Desktop fallback; do not run twice after pointerup on touchscreens.
+    if (performance.now() - lastPointerAction > 500) action();
+  });
+}
+bindTap(pauseBtn, () => setPaused(!paused));
 if (restartBtn) restartBtn.addEventListener("click", () => {
   if (!running) return;
   const oldPlayers = world.players.map(p => ({id:p.id,name:p.name,x:p.x,y:p.y,local:p.id===localId}));
@@ -1515,8 +1528,8 @@ if (restartBtn) restartBtn.addEventListener("click", () => {
   if (pauseOverlay) pauseOverlay.classList.add("hidden");
   notify("Neue Runde gestartet!");
 });
-const resumeBtn=document.getElementById("resumeBtn");if(resumeBtn)resumeBtn.addEventListener("click",()=>setPaused(false));
-const pauseLeaveBtn=document.getElementById("pauseLeaveBtn");if(pauseLeaveBtn)pauseLeaveBtn.addEventListener("click",returnToMenu);
+const resumeBtn=document.getElementById("resumeBtn");bindTap(resumeBtn,()=>setPaused(false));
+const pauseLeaveBtn=document.getElementById("pauseLeaveBtn");bindTap(pauseLeaveBtn,returnToMenu);
 window.addEventListener("keydown",event=>{if(event.key==="Escape"&&running){event.preventDefault();setPaused(!paused);}});
 document.getElementById("soloBtn").addEventListener("click", () => {
   closeNetwork();
