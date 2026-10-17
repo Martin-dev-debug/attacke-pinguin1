@@ -29,6 +29,7 @@ const enemiesStat = document.getElementById("enemiesStat");
 const weaponStat = document.getElementById("weaponStat");
 const pauseOverlay = document.getElementById("pauseOverlay");
 const pauseBtn = document.getElementById("pauseBtn");
+const restartBtn = document.getElementById("restartBtn");
 
 let peer = null;
 let hostConnection = null;
@@ -960,6 +961,22 @@ function updateHost(dt, now) {
     shot.y += shot.vy * dt;
     shot.life -= dt;
 
+    let hitStructure = false;
+    for (const wall of world.walls) {
+      if (shot.x >= wall.x && shot.x <= wall.x + wall.w && shot.y >= wall.y && shot.y <= wall.y + wall.h) {
+        wall.hp = (wall.hp ?? 3) - 1; shot.life = 0; hitStructure = true;
+        if (wall.hp <= 0) world.walls = world.walls.filter(item => item !== wall);
+        break;
+      }
+    }
+    if (!hitStructure) for (const house of world.houses) {
+      if (shot.x >= house.x && shot.x <= house.x + house.w && shot.y >= house.y && shot.y <= house.y + house.h) {
+        house.hp = (house.hp ?? 8) - 1; shot.life = 0; hitStructure = true;
+        if (house.hp <= 0) world.houses = world.houses.filter(item => item !== house);
+        break;
+      }
+    }
+    if (hitStructure) continue;
     for (const enemy of world.enemies) {
       if (enemy.hp <= 0) continue;
 
@@ -1483,6 +1500,21 @@ function setPaused(value) {
   if(paused){touch.x=0;touch.y=0;touch.shooting=false;mouse.down=false;for(const k of Object.keys(keys))keys[k]=false;}
 }
 if(pauseBtn)pauseBtn.addEventListener("click",()=>setPaused(!paused));
+if (restartBtn) restartBtn.addEventListener("click", () => {
+  if (!running) return;
+  const oldPlayers = world.players.map(p => ({id:p.id,name:p.name,x:p.x,y:p.y,local:p.id===localId}));
+  const wasOnline = online, wasHost = isHost;
+  if (wasOnline && !wasHost) { notify("Nur der Gruppen-Ersteller kann die Runde neu starten."); return; }
+  resetWorld();
+  if (oldPlayers.length) {
+    for (const p of oldPlayers) world.players.push(makePlayer(p.id,p.name,Math.max(100,p.x),Math.max(100,p.y),p.local));
+  } else {
+    localId = makeId("solo-"); world.players.push(makePlayer(localId,getName(),220,220,true));
+  }
+  isHost = wasHost; online = wasOnline; gameOver = false; paused = false;
+  if (pauseOverlay) pauseOverlay.classList.add("hidden");
+  notify("Neue Runde gestartet!");
+});
 const resumeBtn=document.getElementById("resumeBtn");if(resumeBtn)resumeBtn.addEventListener("click",()=>setPaused(false));
 const pauseLeaveBtn=document.getElementById("pauseLeaveBtn");if(pauseLeaveBtn)pauseLeaveBtn.addEventListener("click",returnToMenu);
 window.addEventListener("keydown",event=>{if(event.key==="Escape"&&running){event.preventDefault();setPaused(!paused);}});
