@@ -86,3 +86,31 @@ input:focus{border-color:var(--cyan)}
   .rotate-prompt h2{font-size:24px;margin:10px 0}
   .rotate-prompt p{color:#94adba;line-height:1.5}
 }
+
+/* Upgrade-Auswahl: bleibt auf Handy und Desktop über dem Spiel sichtbar. */
+.upgrade-overlay{position:fixed;inset:0;z-index:12000;display:grid;place-items:center;padding:16px;background:#03101adf;overflow-y:auto}
+.upgrade-overlay.hidden{display:none}
+.upgrade-card{width:min(760px,100%);max-height:calc(100dvh - 24px);overflow-y:auto;background:#0e202d;border:1px solid #3d7181;border-radius:20px;padding:clamp(16px,3vw,28px);box-shadow:0 20px 70px #0009}
+.upgrade-card h2{margin:4px 0 8px;font-size:clamp(22px,4vw,32px)}
+.upgrade-subtitle{color:var(--muted);margin:0 0 18px;font-size:14px}
+.upgrade-choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.upgrade-choice{display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-height:170px;text-align:left;white-space:normal;background:#142f3e;border:1px solid #376477;border-radius:14px;padding:16px}
+.upgrade-choice:hover,.upgrade-choice:focus-visible{border-color:var(--cyan);filter:brightness(1.15);outline:2px solid #66e0e855}
+.upgrade-choice .upgrade-icon{font-size:28px;line-height:1}
+.upgrade-choice strong{font-size:16px}
+.upgrade-choice span:last-child{font-size:12px;line-height:1.5;color:#c0d5de;font-weight:500}
+.mobile-controls{z-index:30}
+.joystick,.mobile-actions,.mobile-build-row,.shoot-button{position:relative;z-index:31}
+@media(max-width:600px){
+  .upgrade-card{padding:14px;border-radius:16px}
+  .upgrade-choices{grid-template-columns:1fr;gap:8px}
+  .upgrade-choice{min-height:0;display:grid;grid-template-columns:36px 1fr;column-gap:10px;padding:12px}
+  .upgrade-choice .upgrade-icon{grid-row:span 2;font-size:25px}
+  .upgrade-choice strong{font-size:14px}
+  .upgrade-choice span:last-child{font-size:11px}
+}
+@media (max-width:900px) and (orientation:landscape){
+  .mobile-controls{z-index:30;pointer-events:none}
+  .joystick,.mobile-actions{pointer-events:auto}
+  .game-panel{isolation:isolate}
+}
