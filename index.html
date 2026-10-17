@@ -37,15 +37,15 @@
         <div class="stat"><small>LEVEL</small><strong id="levelStat">1</strong></div>
         <div class="stat"><small>SPIELER</small><strong id="playersStat">1/10</strong></div>
         <div class="stat"><small>GEGNER</small><strong id="enemiesStat">0</strong></div>
-        <div class="stat"><small>SCHNEEBÄLLE</small><strong id="snowStat">15</strong></div>
+        <div class="stat"><small>SCHNEEBÄLLE</small><strong id="snowStat">15</strong></div><div class="stat"><small>WAFFE</small><strong id="weaponStat">Stufe 1</strong></div>
       </div>
-      <button id="leaveBtn" class="pause-button">Verlassen</button>
+      <div class="top-actions"><button id="pauseBtn" class="pause-button">Pause</button><button id="leaveBtn" class="pause-button">Verlassen</button></div>
     </header>
 
     <div class="game-layout">
       <section class="game-panel">
         <canvas id="game" width="960" height="600" aria-label="Spielfeld"></canvas>
-        <div id="notice" class="game-message" role="status" aria-live="polite"></div>
+        <div id="notice" class="game-message" role="status" aria-live="polite"></div><div id="pauseOverlay" class="pause-overlay hidden" role="dialog" aria-modal="true"><div class="pause-card"><p class="eyebrow">SPIEL PAUSIERT</p><h2>Kurze Pause</h2><p>Dein Spiel steht still, bis du fortsetzt.</p><button id="resumeBtn" class="primary">Weiter spielen</button><button id="pauseLeaveBtn" class="secondary">Spiel verlassen</button></div></div>
         <div class="canvas-help">WASD bewegen · Maus zielen/werfen · E Wand · H Haus</div>
         <div class="mobile-controls">
           <div id="joystick" class="joystick" aria-label="Bewegungsjoystick">
@@ -69,8 +69,8 @@
         <div class="side-card">
           <p class="eyebrow">BAUEN</p>
           <button id="wallBtn" class="secondary side-button">Schneewand (5)</button>
-          <button id="houseBtn" class="secondary side-button">Schneehaus (15)</button>
-          <p class="muted">Gebäude blockieren Gegner und Geschosse.</p>
+          <button id="houseBtn" class="secondary side-button">Schneehaus / Iglu (15)</button>
+          <p class="muted">Wand (E): 5 Schneebälle<br>Schneehaus (H): 15 Schneebälle<br>Alle 50 eingesammelten Schneebälle: Waffen-Upgrade.</p>
         </div>
         <div class="side-card">
           <p class="eyebrow">GRUPPE</p>
