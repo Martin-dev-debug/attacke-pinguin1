@@ -2,12 +2,13 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#07131d">
   <title>Attacke Pinguin – Koop Survival</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="menu" class="screen">
+  <section id="menu" class="screen">
     <div class="menu-card">
       <div class="logo">🐧</div>
       <p class="eyebrow">CO-OP SURVIVAL</p>
@@ -15,89 +16,72 @@
       <p class="subtitle">Erkunde. Überlebe. Baue. Kämpfe zusammen.</p>
 
       <label for="playerName">Dein Spielername</label>
-      <input id="playerName" maxlength="16" value="Pinguin 1" autocomplete="nickname">
+      <input id="playerName" maxlength="16" value="Pinguin" autocomplete="nickname">
 
-      <button id="hostBtn" class="primary">Gruppe erstellen</button>
-
-      <div id="roomBox" class="room-box hidden">
-        <p>DEINE RAUM-ID</p>
-        <div class="room-row">
-          <strong id="roomCode">----</strong>
-          <button id="copyRoomBtn" class="small">Kopieren</button>
-        </div>
-        <p class="muted">Schicke deinem Freund die ID und die Adresse dieser Spielseite.</p>
-        <div class="loader"></div>
-        <p id="hostStatus">Warte auf deinen Mitspieler …</p>
-        <button id="startBtn" class="primary" disabled>Spiel starten</button>
-      </div>
+      <button id="soloBtn" class="primary">Solo spielen</button>
+      <button id="createBtn" class="secondary">Gruppe erstellen</button>
 
       <div class="separator"><span>ODER BEITRETEN</span></div>
-
-      <label for="joinCode">Raum-ID deines Freundes</label>
-      <input id="joinCode" maxlength="8" placeholder="z. B. K7P2Q9">
+      <label for="roomInput">Raumcode deines Freundes</label>
+      <input id="roomInput" maxlength="5" placeholder="z. B. K7P2Q" autocomplete="off">
       <button id="joinBtn" class="secondary">Gruppe beitreten</button>
-
-      <p id="menuStatus" class="status" role="status"></p>
-      <p class="controls-note">WASD = bewegen · Maus = zielen · Klick = Schneeball werfen<br>
-      E = Wand bauen · H = Haus bauen · P = Pause</p>
+      <p id="menuMessage" class="status" role="status" aria-live="polite"></p>
+      <p class="controls-note">PC: WASD bewegen · Maus zielen · Linksklick werfen · E Wand · H Haus<br>Handy: Joystick bewegen · WERFEN drücken · Bauen über die Tasten</p>
     </div>
-  </div>
+  </section>
 
-  <main id="gameScreen" class="hidden">
+  <main id="gamePanel" class="hidden">
     <header class="topbar">
       <div class="brand"><span>🐧</span> ATTACKE PINGUIN</div>
       <div class="stats">
-        <div class="stat"><small>LEVEL</small><strong id="level">1</strong></div>
-        <div class="stat"><small>GEBIET</small><strong id="mapSize">1×</strong></div>
-        <div class="stat"><small>GEGNER</small><strong id="enemyCount">0</strong></div>
-        <div class="stat"><small>DEINE SCHNEEBÄLLE</small><strong id="snow">0</strong></div>
+        <div class="stat"><small>LEVEL</small><strong id="levelStat">1</strong></div>
+        <div class="stat"><small>SPIELER</small><strong id="playersStat">1/10</strong></div>
+        <div class="stat"><small>GEGNER</small><strong id="enemiesStat">0</strong></div>
+        <div class="stat"><small>SCHNEEBÄLLE</small><strong id="snowStat">15</strong></div>
       </div>
-      <button id="pauseBtn" class="pause-button">Pause</button>
+      <button id="leaveBtn" class="pause-button">Verlassen</button>
     </header>
 
     <div class="game-layout">
       <section class="game-panel">
-        <canvas id="gameCanvas" width="1100" height="700"></canvas>
-        <div id="gameMessage" class="game-message hidden"></div>
-        <div class="canvas-help">WASD bewegen · Maus zielen · Linksklick werfen · E Wand · H Haus</div>
+        <canvas id="game" width="960" height="600" aria-label="Spielfeld"></canvas>
+        <div id="notice" class="game-message" role="status" aria-live="polite"></div>
+        <div class="canvas-help">WASD bewegen · Maus zielen/werfen · E Wand · H Haus</div>
+        <div class="mobile-controls">
+          <div id="joystick" class="joystick" aria-label="Bewegungsjoystick">
+            <div id="stick" class="stick"></div>
+          </div>
+          <div class="mobile-actions">
+            <button id="shootBtn" class="shoot-button">WERFEN</button>
+            <div class="mobile-build-row">
+              <button id="mobileWallBtn" class="mobile-build">Wand</button>
+              <button id="mobileHouseBtn" class="mobile-build">Haus</button>
+            </div>
+          </div>
+        </div>
       </section>
 
       <aside class="sidebar">
         <div class="side-card">
           <p class="eyebrow">DEIN TEAM</p>
-          <div id="playersList"></div>
+          <ul id="playerList" class="player-list"></ul>
         </div>
         <div class="side-card">
           <p class="eyebrow">BAUEN</p>
-          <div class="build-option"><span class="build-icon">▰</span><div><strong>Schneewand</strong><small>10 Schneebälle</small></div><kbd>E</kbd></div>
-          <div class="build-option"><span class="build-icon">⌂</span><div><strong>Schneehaus</strong><small>35 Schneebälle</small></div><kbd>H</kbd></div>
-          <p class="muted">Baue vor dir. Gebäude blockieren Gegner und Geschosse.</p>
-        </div>
-        <div class="side-card">
-          <p class="eyebrow">ÜBERLEBEN</p>
-          <div class="progress-label"><span>Team-Fortschritt</span><strong id="progressText">0 / 12</strong></div>
-          <div class="progress-track"><div id="progressBar"></div></div>
-          <p id="difficultyText" class="muted">Die Kälte schläft nie.</p>
+          <button id="wallBtn" class="secondary side-button">Schneewand (5)</button>
+          <button id="houseBtn" class="secondary side-button">Schneehaus (15)</button>
+          <p class="muted">Gebäude blockieren Gegner und Geschosse.</p>
         </div>
         <div class="side-card">
           <p class="eyebrow">GRUPPE</p>
-          <div class="connection-row"><span class="connection-dot"></span><span id="connectionText">Verbinde …</span></div>
-          <button id="leaveBtn" class="secondary">Spiel verlassen</button>
+          <p id="roomLabel" class="muted">Solo-Spiel</p>
+          <p id="connectionLabel" class="muted">Offline-Spiel</p>
+          <p class="muted">Bis zu 10 Spieler in einer Gruppe.</p>
+          <canvas id="minimap" width="180" height="140" aria-label="Minimap"></canvas>
         </div>
       </aside>
     </div>
   </main>
-
-  <div id="overlay" class="overlay hidden">
-    <div class="overlay-card">
-      <div id="overlayIcon" class="overlay-icon">❄️</div>
-      <p class="eyebrow">ATTACKE PINGUIN</p>
-      <h2 id="overlayTitle">Pause</h2>
-      <p id="overlayText">Das Spiel ist pausiert.</p>
-      <button id="resumeBtn" class="primary">Weiter spielen</button>
-      <button id="menuBtn" class="secondary">Zum Menü</button>
-    </div>
-  </div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="game.js"></script>
