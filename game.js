@@ -1502,14 +1502,19 @@ function setPaused(value) {
 function bindTap(button, action) {
   if (!button) return;
   let lastPointerAction = 0;
-  button.addEventListener("pointerup", event => {
+  button.style.touchAction = "manipulation";
+  button.addEventListener("pointerdown", event => {
+    // Mobile Safari/Chrome can fail to deliver a useful click after overlays change.
     lastPointerAction = performance.now();
     event.preventDefault();
+    event.stopPropagation();
     action();
   });
-  button.addEventListener("click", () => {
-    // Desktop fallback; do not run twice after pointerup on touchscreens.
-    if (performance.now() - lastPointerAction > 500) action();
+  button.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    // Keyboard and assistive-technology fallback; ignore click following pointerdown.
+    if (performance.now() - lastPointerAction > 700) action();
   });
 }
 bindTap(pauseBtn, () => setPaused(!paused));
