@@ -734,25 +734,12 @@ function blocked(x, y, radius) {
 }
 
 function movePlayer(player, dx, dy) {
-  const nx = clamp(
-    player.x + dx,
-    player.r,
-    world.width - player.r
-  );
+  // Keine Kartenränder: Die Welt wird bei Bedarf um den Spieler erweitert.
+  const nx = player.x + dx;
+  if (!blocked(nx, player.y, player.r)) player.x = nx;
 
-  if (!blocked(nx, player.y, player.r)) {
-    player.x = nx;
-  }
-
-  const ny = clamp(
-    player.y + dy,
-    player.r,
-    world.height - player.r
-  );
-
-  if (!blocked(player.x, ny, player.r)) {
-    player.y = ny;
-  }
+  const ny = player.y + dy;
+  if (!blocked(player.x, ny, player.r)) player.y = ny;
 }
 
 function buildStructure(player, type) {
@@ -776,10 +763,6 @@ function buildStructure(player, type) {
     : { x: bx - 28, y: by - 24, w: 56, h: 48 };
 
   if (
-    structure.x < 0 ||
-    structure.y < 0 ||
-    structure.x + structure.w > world.width ||
-    structure.y + structure.h > world.height ||
     blocked(bx, by, 25)
   ) return;
 
@@ -827,18 +810,46 @@ function spawnEnemy() {
   const alive=world.players.filter(p=>p.alive);
   const target=alive.length?alive[Math.floor(Math.random()*alive.length)]:{x:world.width/2,y:world.height/2};
   const a=random(0,Math.PI*2),d=random(470,680);
-  const x=clamp(target.x+Math.cos(a)*d,30,world.width-30),y=clamp(target.y+Math.sin(a)*d,30,world.height-30);
-  let type="normal";if(world.level>=7&&Math.random()<0.12)type="boss";else if(world.level>=3&&Math.random()<0.28)type="heavy";
-  const scale=1+(world.level-1)*0.16,hp=Math.round((type==="boss"?210:type==="heavy"?85:35)*scale);
-  world.enemies.push({id:"enemy-"+enemyId++,type,x,y,r:(type==="boss"?31:type==="heavy"?23:16)+Math.min(world.level,8),hp,maxHp:hp,damage:type==="boss"?62:type==="heavy"?38:24,speed:(type==="boss"?38:type==="heavy"?34:45)+Math.min(world.level*2.5,45)});
+  const x=target.x+Math.cos(a)*d, y=target.y+Math.sin(a)*d;
+  // Neue Gegnertypen erscheinen mit steigendem Level; Werte skalieren unbegrenzt mit.
+  let type="normal";
+  const roll=Math.random();
+  if(world.level>=12&&roll<0.10)type="boss";
+  else if(world.level>=9&&roll<0.28)type="elite";
+  else if(world.level>=6&&roll<0.45)type="armored";
+  else if(world.level>=4&&roll<0.58)type="ice";
+  else if(world.level>=3&&roll<0.76)type="heavy";
+  const scale=1+(world.level-1)*0.16;
+  const baseHp=({boss:210,elite:150,armored:115,ice:75,heavy:85,normal:35})[type];
+  const baseDamage=({boss:62,elite:48,armored:42,ice:32,heavy:38,normal:24})[type];
+  const baseSpeed=({boss:38,elite:58,armored:31,ice:55,heavy:34,normal:45})[type];
+  const baseRadius=({boss:31,elite:25,armored:24,ice:19,heavy:23,normal:16})[type];
+  const hp=Math.round(baseHp*scale);
+  world.enemies.push({id:"enemy-"+enemyId++,type,x,y,r:baseRadius+Math.min(world.level,12),hp,maxHp:hp,damage:Math.round(baseDamage*(1+(world.level-1)*0.08)),speed:baseSpeed+Math.min(world.level*2.5,65)});
+}
+
+function shiftWorld(dx, dy) {
+  // Verschiebt alle Weltobjekte gemeinsam, damit der Übergang unsichtbar bleibt.
+  for (const p of world.players) { p.x += dx; p.y += dy; }
+  for (const e of world.enemies) { e.x += dx; e.y += dy; }
+  for (const d of world.snowballs) { d.x += dx; d.y += dy; }
+  for (const q of world.shots) { q.x += dx; q.y += dy; }
+  for (const w of world.walls) { w.x += dx; w.y += dy; }
+  for (const h of world.houses) { h.x += dx; h.y += dy; }
 }
 
 function ensureEndlessWorld() {
-  const sx=world.players.some(p=>p.x<260),sy=world.players.some(p=>p.y<260);
-  if(sx){for(const p of world.players)p.x+=1000;for(const e of world.enemies)e.x+=1000;for(const d of world.snowballs)d.x+=1000;for(const q of world.shots)q.x+=1000;for(const w of world.walls)w.x+=1000;for(const h of world.houses)h.x+=1000;world.width+=1000;}
-  if(sy){for(const p of world.players)p.y+=800;for(const e of world.enemies)e.y+=800;for(const d of world.snowballs)d.y+=800;for(const q of world.shots)q.y+=800;for(const w of world.walls)w.y+=800;for(const h of world.houses)h.y+=800;world.height+=800;}
-  if(world.players.some(p=>p.x>world.width-320))world.width+=1000;
-  if(world.players.some(p=>p.y>world.height-320))world.height+=800;
+  // Früh genug erweitern, bevor ein Spieler den bisherigen Kartenrand erreicht.
+  if (world.players.some(p => p.x < 500)) {
+    shiftWorld(1200, 0);
+    world.width += 1200;
+  }
+  if (world.players.some(p => p.y < 450)) {
+    shiftWorld(0, 1000);
+    world.height += 1000;
+  }
+  if (world.players.some(p => p.x > world.width - 500)) world.width += 1200;
+  if (world.players.some(p => p.y > world.height - 450)) world.height += 1000;
 }
 
 function updateHost(dt, now) {
@@ -1001,11 +1012,7 @@ function updateHost(dt, now) {
   }
 
   world.shots = world.shots.filter(shot =>
-    shot.life > 0 &&
-    shot.x >= 0 &&
-    shot.y >= 0 &&
-    shot.x <= world.width &&
-    shot.y <= world.height
+    shot.life > 0
   );
 
   world.enemies = world.enemies.filter(enemy => enemy.hp > 0);
@@ -1037,17 +1044,9 @@ function updateCamera() {
   const player = localPlayer();
   if (!player) return;
 
-  camera.x = clamp(
-    player.x - VIEW_W / 2,
-    0,
-    Math.max(0, world.width - VIEW_W)
-  );
-
-  camera.y = clamp(
-    player.y - VIEW_H / 2,
-    0,
-    Math.max(0, world.height - VIEW_H)
-  );
+  // Die Kamera kennt keine Kartenkanten und folgt dem Spieler überallhin.
+  camera.x = player.x - VIEW_W / 2;
+  camera.y = player.y - VIEW_H / 2;
 }
 
 function drawGround() {
@@ -1141,15 +1140,6 @@ function drawPlayer(player) {
 function drawWorld() {
   drawGround();
 
-  ctx.strokeStyle = "#6e9ca8";
-  ctx.lineWidth = 5;
-  ctx.strokeRect(
-    -camera.x,
-    -camera.y,
-    world.width,
-    world.height
-  );
-
   for (const house of world.houses) {
     const x=house.x-camera.x,y=house.y-camera.y;
     ctx.fillStyle="#e8f8fc";ctx.beginPath();ctx.ellipse(x+house.w/2,y+house.h*0.62,house.w/2,house.h*0.58,0,Math.PI,0);
@@ -1209,10 +1199,43 @@ function drawWorld() {
     const x = enemy.x - camera.x;
     const y = enemy.y - camera.y;
 
-    ctx.fillStyle = enemy.type === "boss" ? "#7e45b8" : enemy.type === "heavy" ? "#e27b32" : "#c74343";
+    const enemyColors = {
+      normal: "#c74343", heavy: "#e27b32", ice: "#39b9d5",
+      armored: "#687783", elite: "#d83c91", boss: "#7e45b8"
+    };
+    ctx.fillStyle = enemyColors[enemy.type] || enemyColors.normal;
     ctx.beginPath();
-    ctx.arc(x, y, enemy.r, 0, Math.PI * 2);
+    if (enemy.type === "ice") {
+      ctx.moveTo(x, y - enemy.r - 4);
+      ctx.lineTo(x + enemy.r, y);
+      ctx.lineTo(x, y + enemy.r + 4);
+      ctx.lineTo(x - enemy.r, y);
+      ctx.closePath();
+    } else if (enemy.type === "elite" || enemy.type === "boss") {
+      const spikes = enemy.type === "boss" ? 12 : 8;
+      for (let i = 0; i < spikes * 2; i++) {
+        const a = i * Math.PI / spikes;
+        const radius = i % 2 === 0 ? enemy.r + 5 : enemy.r * 0.78;
+        const px = x + Math.cos(a) * radius, py = y + Math.sin(a) * radius;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+    } else {
+      ctx.arc(x, y, enemy.r, 0, Math.PI * 2);
+    }
     ctx.fill();
+    if (enemy.type === "armored") {
+      ctx.strokeStyle = "#d7e0e5";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, y, enemy.r * 0.58, 0, Math.PI * 2); ctx.stroke();
+    } else if (enemy.type === "ice") {
+      ctx.strokeStyle = "#d8fbff"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x-enemy.r*0.45,y); ctx.lineTo(x+enemy.r*0.45,y); ctx.stroke();
+    } else if (enemy.type === "elite" || enemy.type === "boss") {
+      ctx.strokeStyle = enemy.type === "boss" ? "#e6c8ff" : "#ffc6e4";
+      ctx.lineWidth = 3; ctx.stroke();
+    }
 
     ctx.fillStyle = "#fff";
     ctx.beginPath();
