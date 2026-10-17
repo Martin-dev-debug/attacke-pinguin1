@@ -820,15 +820,16 @@ function spawnEnemy() {
   // Neue Gegnertypen erscheinen mit steigendem Level; Werte skalieren unbegrenzt mit.
   let type="normal";
   const roll=Math.random();
-  if(world.level>=12&&roll<0.10)type="boss";
-  else if(world.level>=9&&roll<0.28)type="elite";
-  else if(world.level>=6&&roll<0.45)type="armored";
-  else if(world.level>=4&&roll<0.58)type="ice";
-  else if(world.level>=3&&roll<0.76)type="heavy";
-  const scale=1+(world.level-1)*0.16;
-  // Eigene Gegnertypen werden nach und nach freigeschaltet.
-  if (world.level >= 15 && roll < 0.18) type = "phantom";
+  // Die seltenen, späten Gegnertypen haben Vorrang und überschreiben
+  // sich nicht gegenseitig.
+  if (world.level >= 15 && roll < 0.12) type = "phantom";
   else if (world.level >= 10 && roll < 0.24) type = "crystal";
+  else if (world.level >= 12 && roll < 0.36) type = "boss";
+  else if (world.level >= 9 && roll < 0.49) type = "elite";
+  else if (world.level >= 6 && roll < 0.62) type = "armored";
+  else if (world.level >= 4 && roll < 0.74) type = "ice";
+  else if (world.level >= 3 && roll < 0.86) type = "heavy";
+  const scale=1+(world.level-1)*0.16;
   const baseHp=({boss:210,elite:150,armored:115,ice:75,heavy:85,normal:35,crystal:125,phantom:105})[type];
   const baseDamage=({boss:62,elite:48,armored:42,ice:32,heavy:38,normal:24,crystal:45,phantom:39})[type];
   const baseSpeed=({boss:38,elite:58,armored:31,ice:55,heavy:34,normal:45,crystal:48,phantom:78})[type];
