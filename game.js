@@ -26,9 +26,6 @@ const levelStat = document.getElementById("levelStat");
 const snowStat = document.getElementById("snowStat");
 const playersStat = document.getElementById("playersStat");
 const enemiesStat = document.getElementById("enemiesStat");
-const weaponStat = document.getElementById("weaponStat");
-const pauseOverlay = document.getElementById("pauseOverlay");
-const pauseBtn = document.getElementById("pauseBtn");
 
 let peer = null;
 let hostConnection = null;
@@ -38,7 +35,6 @@ let pendingConnections = new Set();
 let isHost = false;
 let online = false;
 let running = false;
-let paused = false;
 let gameOver = false;
 let roomCode = "";
 let localId = "";
@@ -109,8 +105,6 @@ function resetWorld() {
   enemyId = 1;
   lastSpawn = 0;
   gameOver = false;
-  paused = false;
-  if (pauseOverlay) pauseOverlay.classList.add("hidden");
   joinedGame = false;
   joiningSent = false;
 }
@@ -126,9 +120,6 @@ function makePlayer(id, name, x, y, local = false) {
     angle: 0,
     hp: 100,
     snow: 15,
-    totalSnowCollected: 0,
-    weaponLevel: 1,
-    nextUpgradeAt: 50,
     alive: true,
     isLocal: local,
     input: {
@@ -184,8 +175,6 @@ function closeNetwork() {
 
 function returnToMenu() {
   running = false;
-  paused = false;
-  if (pauseOverlay) pauseOverlay.classList.add("hidden");
   closeNetwork();
   gamePanel.classList.add("hidden");
   menu.classList.remove("hidden");
@@ -195,8 +184,6 @@ function startGame() {
   if (running) return;
 
   running = true;
-  paused = false;
-  if (pauseOverlay) pauseOverlay.classList.add("hidden");
   joinedGame = true;
 
   menu.classList.add("hidden");
@@ -526,7 +513,7 @@ async function joinOnlineRoom() {
       }
 
       if (data.type === "snapshot") {
-        if (!paused) applySnapshot(data.world);
+        applySnapshot(data.world);
       }
     });
 
@@ -593,9 +580,6 @@ function makeSnapshot() {
       angle: p.angle,
       hp: p.hp,
       snow: p.snow,
-      totalSnowCollected: p.totalSnowCollected || 0,
-      weaponLevel: p.weaponLevel || 1,
-      nextUpgradeAt: p.nextUpgradeAt || 50,
       alive: p.alive
     })),
 
@@ -673,10 +657,16 @@ function getInput(player) {
     dy /= length;
   }
 
-  let aimX = player.angle ? Math.cos(player.angle) : 1;
-  let aimY = player.angle ? Math.sin(player.angle) : 0;
-  if (Math.hypot(dx, dy) > 0.05) {
-    const len = Math.hypot(dx, dy); aimX = dx / len; aimY = dy / len;
+  let aimX = mouse.x + camera.x - player.x;
+  let aimY = mouse.y + camera.y - player.y;
+  const aimLength = Math.hypot(aimX, aimY);
+
+  if (aimLength > 0.01) {
+    aimX /= aimLength;
+    aimY /= aimLength;
+  } else {
+    aimX = Math.cos(player.angle);
+    aimY = Math.sin(player.angle);
   }
 
   return {
@@ -721,13 +711,454 @@ function blocked(x, y, radius) {
   }
 
   for (const house of world.houses) {
-    const x=house.x-camera.x,y=house.y-camera.y;
-    ctx.fillStyle="#e8f8fc";ctx.beginPath();
-    ctx.ellipse(x+house.w/2,y+house.h*0.62,house.w/2,house.h*0.58,0,Math.PI,0);
-    ctx.lineTo(x+house.w,y+house.h*0.82);ctx.quadraticCurveTo(x+house.w/2,y+house.h*1.15,x,y+house.h*0.82);ctx.closePath();ctx.fill();
-    ctx.strokeStyle="#8bbac8";ctx.lineWidth=2;ctx.stroke();ctx.strokeStyle="#b0dce7";ctx.lineWidth=1;
-    for(let row=0;row<3;row++){const yy=y+10+row*10;ctx.beginPath();ctx.moveTo(x+8,yy);ctx.lineTo(x+house.w-8,yy);ctx.stroke();}
-    ctx.fillStyle="#83b8c9";ctx.beginPath();ctx.arc(x+house.w/2,y+house.h-2,9,Math.PI,0);ctx.fill();
+    if (
+      x + radius > house.x &&
+      x - radius < house.x + house.w &&
+      y + radius > house.y &&
+      y - radius < house.y + house.h
+    ) return true;
+  }
+
+  return false;
+}
+
+function movePlayer(player, dx, dy) {
+  const nx = clamp(
+    player.x + dx,
+    player.r,
+    world.width - player.r
+  );
+
+  if (!blocked(nx, player.y, player.r)) {
+    player.x = nx;
+  }
+
+  const ny = clamp(
+    player.y + dy,
+    player.r,
+    world.height - player.r
+  );
+
+  if (!blocked(player.x, ny, player.r)) {
+    player.y = ny;
+  }
+}
+
+function buildStructure(player, type) {
+  if (!player || !player.alive) return;
+
+  const cost = type === "wall" ? 5 : 15;
+
+  if (player.snow < cost) {
+    if (player.id === localId) {
+      notify("Du brauchst " + cost + " Schneebälle.");
+    }
+    return;
+  }
+
+  const distance = 60;
+  const bx = player.x + Math.cos(player.angle) * distance;
+  const by = player.y + Math.sin(player.angle) * distance;
+
+  const structure = type === "wall"
+    ? { x: bx - 24, y: by - 8, w: 48, h: 16 }
+    : { x: bx - 28, y: by - 24, w: 56, h: 48 };
+
+  if (
+    structure.x < 0 ||
+    structure.y < 0 ||
+    structure.x + structure.w > world.width ||
+    structure.y + structure.h > world.height ||
+    blocked(bx, by, 25)
+  ) return;
+
+  if (type === "wall") {
+    world.walls.push(structure);
+  } else {
+    world.houses.push(structure);
+  }
+
+  player.snow -= cost;
+}
+
+function buildFromClient(type) {
+  if (!online || isHost) {
+    const player = localPlayer();
+    if (player) buildStructure(player, type);
+    return;
+  }
+
+  if (hostConnection && hostConnection.open) {
+    hostConnection.send({
+      type: "build",
+      building: type
+    });
+  }
+}
+
+function shoot(player, now) {
+  if (now - player.lastShot < 380) return;
+
+  player.lastShot = now;
+
+  const vx = Math.cos(player.angle);
+  const vy = Math.sin(player.angle);
+
+  world.shots.push({
+    x: player.x + vx * 24,
+    y: player.y + vy * 24,
+    vx: vx * 510,
+    vy: vy * 510,
+    owner: player.id,
+    life: 1.5,
+    r: 6
+  });
+}
+
+function dropSnow(x, y, amount = 3) {
+  world.snowballs.push({ x, y, amount, r: 8 });
+}
+
+function spawnEnemy() {
+  const side = Math.floor(Math.random() * 4);
+  let x;
+  let y;
+
+  if (side === 0) {
+    x = random(0, world.width);
+    y = 20;
+  } else if (side === 1) {
+    x = world.width - 20;
+    y = random(0, world.height);
+  } else if (side === 2) {
+    x = random(0, world.width);
+    y = world.height - 20;
+  } else {
+    x = 20;
+    y = random(0, world.height);
+  }
+
+  const hp = 35 + world.level * 9;
+
+  world.enemies.push({
+    id: "enemy-" + enemyId++,
+    x,
+    y,
+    r: 16 + Math.min(world.level, 6),
+    hp,
+    maxHp: hp,
+    speed: 45 + world.level * 4
+  });
+}
+
+function updateHost(dt, now) {
+  if (!isHost || gameOver) return;
+
+  for (const player of world.players) {
+    if (!player.alive) continue;
+
+    const input = player.isLocal
+      ? getInput(player)
+      : player.input;
+
+    player.input = input;
+
+    if (Math.hypot(input.aimX, input.aimY) > 0.05) {
+      player.angle = Math.atan2(input.aimY, input.aimX);
+    } else if (Math.hypot(input.dx, input.dy) > 0.05) {
+      player.angle = Math.atan2(input.dy, input.dx);
+    }
+
+    movePlayer(
+      player,
+      input.dx * player.speed * dt,
+      input.dy * player.speed * dt
+    );
+
+    if (input.shoot) shoot(player, now);
+
+    if (input.wall && now - player.lastWall > 450) {
+      player.lastWall = now;
+      buildStructure(player, "wall");
+    }
+
+    if (input.house && now - player.lastHouse > 450) {
+      player.lastHouse = now;
+      buildStructure(player, "house");
+    }
+
+    for (const drop of world.snowballs) {
+      if (
+        drop.amount > 0 &&
+        Math.hypot(player.x - drop.x, player.y - drop.y) <
+          player.r + drop.r + 4
+      ) {
+        player.snow += drop.amount;
+        drop.amount = 0;
+      }
+    }
+  }
+
+  world.snowballs = world.snowballs.filter(d => d.amount > 0);
+
+  const spawnInterval = Math.max(400, 1800 - world.level * 90);
+
+  if (now - lastSpawn > spawnInterval) {
+    lastSpawn = now;
+
+    const count = Math.min(1 + Math.floor(world.level / 3), 4);
+
+    for (let i = 0; i < count; i++) {
+      spawnEnemy();
+    }
+  }
+
+  for (const enemy of world.enemies) {
+    let target = null;
+    let nearest = Infinity;
+
+    for (const player of world.players) {
+      if (!player.alive) continue;
+
+      const distance = Math.hypot(
+        player.x - enemy.x,
+        player.y - enemy.y
+      );
+
+      if (distance < nearest) {
+        nearest = distance;
+        target = player;
+      }
+    }
+
+    if (!target) continue;
+
+    const dx = target.x - enemy.x;
+    const dy = target.y - enemy.y;
+    const length = Math.hypot(dx, dy) || 1;
+
+    const nx = enemy.x + dx / length * enemy.speed * dt;
+    const ny = enemy.y + dy / length * enemy.speed * dt;
+
+    if (!blocked(nx, ny, enemy.r)) {
+      enemy.x = nx;
+      enemy.y = ny;
+    }
+
+    if (
+      Math.hypot(target.x - enemy.x, target.y - enemy.y) <
+      enemy.r + target.r
+    ) {
+      target.hp -= 24 * dt;
+
+      if (target.hp <= 0) {
+        target.hp = 0;
+        target.alive = false;
+        dropSnow(target.x, target.y, 8);
+      }
+    }
+  }
+
+  for (const shot of world.shots) {
+    shot.x += shot.vx * dt;
+    shot.y += shot.vy * dt;
+    shot.life -= dt;
+
+    for (const enemy of world.enemies) {
+      if (enemy.hp <= 0) continue;
+
+      if (
+        Math.hypot(shot.x - enemy.x, shot.y - enemy.y) <
+        shot.r + enemy.r
+      ) {
+        enemy.hp -= 25;
+        shot.life = 0;
+
+        if (enemy.hp <= 0) {
+          dropSnow(
+            enemy.x,
+            enemy.y,
+            3 + Math.floor(Math.random() * 4)
+          );
+        }
+
+        break;
+      }
+    }
+  }
+
+  world.shots = world.shots.filter(shot =>
+    shot.life > 0 &&
+    shot.x >= 0 &&
+    shot.y >= 0 &&
+    shot.x <= world.width &&
+    shot.y <= world.height
+  );
+
+  world.enemies = world.enemies.filter(enemy => enemy.hp > 0);
+
+  if (world.enemies.length === 0 && now - lastSpawn > 1800) {
+    world.level++;
+    world.width += 350;
+    world.height += 250;
+
+    for (const player of world.players) {
+      if (player.alive) player.snow += 5;
+    }
+
+    notify("Level " + world.level + " erreicht!");
+  }
+
+  if (
+    world.players.length > 0 &&
+    world.players.every(player => !player.alive)
+  ) {
+    gameOver = true;
+    notify("Game Over!", 100000);
+  }
+}
+
+/* -------------------- Kamera und Darstellung -------------------- */
+
+function updateCamera() {
+  const player = localPlayer();
+  if (!player) return;
+
+  camera.x = clamp(
+    player.x - VIEW_W / 2,
+    0,
+    Math.max(0, world.width - VIEW_W)
+  );
+
+  camera.y = clamp(
+    player.y - VIEW_H / 2,
+    0,
+    Math.max(0, world.height - VIEW_H)
+  );
+}
+
+function drawGround() {
+  ctx.fillStyle = "#d8edf0";
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+
+  ctx.strokeStyle = "#c5e0e5";
+  ctx.lineWidth = 1;
+
+  const grid = 80;
+
+  for (let x = -(camera.x % grid); x < VIEW_W; x += grid) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, VIEW_H);
+    ctx.stroke();
+  }
+
+  for (let y = -(camera.y % grid); y < VIEW_H; y += grid) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(VIEW_W, y);
+    ctx.stroke();
+  }
+}
+
+function drawPlayer(player) {
+  const x = player.x - camera.x;
+  const y = player.y - camera.y;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(player.angle);
+
+  // Pinguinkörper
+  ctx.fillStyle = player.alive ? "#202b35" : "#737e83";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 18, 22, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Bauch
+  ctx.fillStyle = "#f5f7f5";
+  ctx.beginPath();
+  ctx.ellipse(3, 5, 10, 13, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Schnabel zeigt in Blickrichtung
+  ctx.fillStyle = "#f7a83e";
+  ctx.beginPath();
+  ctx.moveTo(12, -4);
+  ctx.lineTo(26, 0);
+  ctx.lineTo(12, 5);
+  ctx.closePath();
+  ctx.fill();
+
+  // Auge
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(7, -8, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#111";
+  ctx.beginPath();
+  ctx.arc(8, -8, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+
+  ctx.textAlign = "center";
+  ctx.font = "12px Arial";
+  ctx.fillStyle = "#10202a";
+  ctx.fillText(player.name, x, y - 30);
+
+  ctx.fillStyle = "#9b3434";
+  ctx.fillRect(x - 19, y + 27, 38, 5);
+
+  ctx.fillStyle = "#62d46b";
+  ctx.fillRect(
+    x - 19,
+    y + 27,
+    38 * clamp(player.hp / 100, 0, 1),
+    5
+  );
+
+  if (!player.alive) {
+    ctx.fillStyle = "#9b3434";
+    ctx.fillText("KO", x, y + 45);
+  }
+}
+
+function drawWorld() {
+  drawGround();
+
+  ctx.strokeStyle = "#6e9ca8";
+  ctx.lineWidth = 5;
+  ctx.strokeRect(
+    -camera.x,
+    -camera.y,
+    world.width,
+    world.height
+  );
+
+  for (const house of world.houses) {
+    const x = house.x - camera.x;
+    const y = house.y - camera.y;
+
+    ctx.fillStyle = "#a9784e";
+    ctx.fillRect(x, y, house.w, house.h);
+
+    ctx.fillStyle = "#6d4831";
+    ctx.beginPath();
+    ctx.moveTo(x - 5, y + 4);
+    ctx.lineTo(x + house.w / 2, y - 14);
+    ctx.lineTo(x + house.w + 5, y + 4);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#bfe9f2";
+    ctx.fillRect(
+      x + house.w * 0.62,
+      y + house.h * 0.35,
+      10,
+      12
+    );
   }
 
   for (const wall of world.walls) {
@@ -781,7 +1212,7 @@ function blocked(x, y, radius) {
     const x = enemy.x - camera.x;
     const y = enemy.y - camera.y;
 
-    ctx.fillStyle = enemy.type === "boss" ? "#7e45b8" : enemy.type === "heavy" ? "#e27b32" : "#c74343";
+    ctx.fillStyle = "#c74343";
     ctx.beginPath();
     ctx.arc(x, y, enemy.r, 0, Math.PI * 2);
     ctx.fill();
@@ -877,7 +1308,6 @@ function updateUI(now) {
   snowStat.textContent = player ? player.snow : 0;
   playersStat.textContent = world.players.length + "/" + MAX_PLAYERS;
   enemiesStat.textContent = world.enemies.length;
-  weaponStat.textContent = "Stufe " + (player ? (player.weaponLevel || 1) : 1);
 
   playerList.replaceChildren();
 
@@ -908,8 +1338,6 @@ function gameLoop(now) {
   );
 
   lastFrame = now;
-
-  if (paused) { updateCamera(); drawWorld(); drawMinimap(); updateUI(now); requestAnimationFrame(gameLoop); return; }
 
   if (isHost) {
     updateHost(dt, now);
@@ -1065,16 +1493,6 @@ document.getElementById("mobileHouseBtn").addEventListener("click", () => {
   buildFromClient("house");
 });
 
-function setPaused(value) {
-  paused=!!value&&running;
-  if(pauseOverlay)pauseOverlay.classList.toggle("hidden",!paused);
-  if(pauseBtn)pauseBtn.textContent=paused?"Fortsetzen":"Pause";
-  if(paused){touch.x=0;touch.y=0;touch.shooting=false;mouse.down=false;for(const k of Object.keys(keys))keys[k]=false;}
-}
-if(pauseBtn)pauseBtn.addEventListener("click",()=>setPaused(!paused));
-const resumeBtn=document.getElementById("resumeBtn");if(resumeBtn)resumeBtn.addEventListener("click",()=>setPaused(false));
-const pauseLeaveBtn=document.getElementById("pauseLeaveBtn");if(pauseLeaveBtn)pauseLeaveBtn.addEventListener("click",returnToMenu);
-window.addEventListener("keydown",event=>{if(event.key==="Escape"&&running){event.preventDefault();setPaused(!paused);}});
 document.getElementById("soloBtn").addEventListener("click", () => {
   closeNetwork();
   resetWorld();
