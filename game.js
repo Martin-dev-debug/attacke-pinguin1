@@ -185,6 +185,7 @@ function closeNetwork() {
 
 function returnToMenu() {
   running = false;
+  document.body.classList.remove("game-running");
   paused = false;
   if (pauseOverlay) pauseOverlay.classList.add("hidden");
   closeNetwork();
@@ -196,6 +197,7 @@ function startGame() {
   if (running) return;
 
   running = true;
+  document.body.classList.add("game-running");
   paused = false;
   if (pauseOverlay) pauseOverlay.classList.add("hidden");
   joinedGame = true;
