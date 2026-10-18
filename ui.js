@@ -88,7 +88,14 @@ function updateUI(now) {
   if (pathText) pathText.textContent = kills >= 10 ? ((10 - pathProgress) || 10) + " Kills bis zur nächsten Pfad-Belohnung · Meilensteine geben Münzen" : (10 - kills) + " Kills bis zur ersten Pfad-Belohnung";
   if (pathFill) pathFill.style.width = (pathProgress / pathStep * 100) + "%";
   const wheelOverlay = document.getElementById("wheelOverlay");
-  if (wheelOverlay) wheelOverlay.classList.toggle("hidden", !(player && player.pendingWheel));
+  if (wheelOverlay) {
+    wheelOverlay.classList.toggle("hidden", !(player && player.pendingWheel));
+    wheelOverlay.style.zIndex = "12020";
+    const spin = document.getElementById("spinWheelBtn");
+    if (spin && player && player.pendingWheel) { spin.disabled = false; spin.textContent = "Glücksrad drehen"; }
+  }
+  const runOverOverlay = document.getElementById("runOverOverlay");
+  if (runOverOverlay) runOverOverlay.classList.toggle("hidden", !gameOver);
   const collected = player ? (player.totalSnowCollected || 0) : 0, nextAt = player ? (player.nextUpgradeAt || 25) : 25;
   const level = player ? (player.level || 1) : 1;
   const needed = 25 + Math.max(0, level - 1) * 15;
@@ -106,11 +113,10 @@ function updateUI(now) {
 
   for (const p of world.players) {
     const item = document.createElement("li");
-    const respawnSeconds = p.respawnAt ? Math.max(0, Math.ceil((p.respawnAt - now) / 1000)) : 0;
     item.textContent =
       p.name +
       (p.id === localId ? " (Du)" : "") +
-      (!p.alive ? " – Wieder da in " + respawnSeconds + " s" : " · Level " + (p.level || 1));
+      (!p.alive ? " – am Boden" : " · Level " + (p.level || 1));
 
     playerList.appendChild(item);
   }
@@ -121,3 +127,11 @@ function updateUI(now) {
   }
 }
 
+
+const runRestartBtn = document.getElementById("runRestartBtn");
+if (runRestartBtn) runRestartBtn.addEventListener("click", () => {
+  const restart = document.getElementById("restartBtn");
+  if (restart) restart.click();
+});
+const runMenuBtn = document.getElementById("runMenuBtn");
+if (runMenuBtn) runMenuBtn.addEventListener("click", () => returnToMenu());
