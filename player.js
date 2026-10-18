@@ -1,6 +1,18 @@
 /* Attacke Pinguin – player */
 
+function loadMetaProgress() {
+  try { return JSON.parse(localStorage.getItem("attackePinguinMeta") || '{"coins":0,"ownedSkins":["classic"],"skin":"classic","passXP":0}'); }
+  catch (_) { return { coins: 0, ownedSkins: ["classic"], skin: "classic", passXP: 0 }; }
+}
+function saveMetaProgress(player) {
+  if (!player || player.id !== localId) return;
+  const meta = loadMetaProgress();
+  meta.coins = Math.max(0, Math.floor(player.coins || 0));
+  meta.passXP = Math.max(meta.passXP || 0, player.kills || 0);
+  try { localStorage.setItem("attackePinguinMeta", JSON.stringify(meta)); } catch (_) {}
+}
 function makePlayer(id, name, x, y, local = false) {
+  const meta = loadMetaProgress();
   return {
     id,
     name,
@@ -13,7 +25,10 @@ function makePlayer(id, name, x, y, local = false) {
     snow: 15,
     totalSnowCollected: 0,
     kills: 0,
-    coins: 0,
+    coins: local ? Math.max(0, Number(meta.coins) || 0) : 0,
+    downedAt: 0,
+    reviveProgress: 0,
+    skin: local ? (meta.skin || "classic") : "classic",
     regenPerSecond: 0,
     critChance: 0,
     shotSize: 6,
@@ -49,7 +64,8 @@ function makePlayer(id, name, x, y, local = false) {
       aimY: 0,
       shoot: false,
       wall: false,
-      house: false
+      house: false,
+      revive: false
     },
     lastShot: 0,
     lastWall: 0,
@@ -118,7 +134,8 @@ function getInput(player) {
     aimY,
     shoot: mouse.down || touch.shooting || !!keys[" "],
     wall: !!keys.e,
-    house: !!keys.h
+    house: !!keys.h,
+    revive: !!keys.r
   };
 }
 
