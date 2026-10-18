@@ -8,6 +8,7 @@ const VIEW_W = 960;
 const VIEW_H = 600;
 
 const canvas = document.getElementById("game");
+const inputCanvas = document.getElementById("game3d") || canvas;
 const ctx = canvas.getContext("2d");
 const mini = document.getElementById("minimap");
 const mctx = mini.getContext("2d");
@@ -219,15 +220,15 @@ window.addEventListener("keyup", event => {
   keys[key] = false;
 });
 
-canvas.addEventListener("mousemove", event => {
-  const rect = canvas.getBoundingClientRect();
+inputCanvas.addEventListener("mousemove", event => {
+  const rect = inputCanvas.getBoundingClientRect();
 
   mouse.x = (event.clientX - rect.left) * VIEW_W / rect.width;
   mouse.y = (event.clientY - rect.top) * VIEW_H / rect.height;
   mouse.active = true;
 });
 
-canvas.addEventListener("mousedown", event => {
+inputCanvas.addEventListener("mousedown", event => {
   if (event.button === 0) mouse.down = true;
 });
 
@@ -235,7 +236,7 @@ window.addEventListener("mouseup", () => {
   mouse.down = false;
 });
 
-canvas.addEventListener("contextmenu", event => {
+inputCanvas.addEventListener("contextmenu", event => {
   event.preventDefault();
 });
 
@@ -309,7 +310,7 @@ joystick.addEventListener("lostpointercapture", releaseJoystick);
 
 // Survival.io-ähnliche Steuerung: Auf der linken Spielfeldhälfte ziehen,
 // der virtuelle Stick erscheint dort, wo der Finger aufgesetzt wurde.
-canvas.addEventListener("pointerdown", event => {
+inputCanvas.addEventListener("pointerdown", event => {
   if (event.pointerType === "mouse" || event.clientX > window.innerWidth * 0.55) return;
   if (!running || paused || gameOver) return;
   const upgradeOverlay = document.getElementById("upgradeOverlay");
