@@ -284,7 +284,7 @@ function updateHost(dt, now) {
             killer.coins = (killer.coins || 0) + tier * 2;
             killer.hp = Math.min(killer.maxHp || 100, killer.hp + (killer.killHeal || 0));
             if (killer.kills % 10 === 0) { killer.coins += 10; if (killer.id === localId) notify("Belohnungspfad: +10 Münzen!", 2200); }
-            saveMetaProgress(killer);
+            saveMetaProgress(killer, 1);
           }
           if (enemy.type === "boss") { world.bossDefeated = (world.bossDefeated || 0) + 1; unlockAchievement("first-boss", "Eisriese besiegt"); dropSnow(enemy.x, enemy.y, 30 + Math.floor(world.level / 2)); }
           const bonus = killer ? (killer.dropBonus || 0) : 0;
