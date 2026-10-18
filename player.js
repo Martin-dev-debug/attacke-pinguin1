@@ -21,6 +21,8 @@ function makePlayer(id, name, x, y, local = false) {
     extraProjectiles: 0,
     pickupRadius: 0,
     damageReduction: 0,
+    piercing: 0,
+    blastRadius: 0,
     maxHp: 100,
     alive: true,
     isLocal: local,
@@ -71,13 +73,24 @@ function getInput(player) {
 
   let aimX = player.angle ? Math.cos(player.angle) : 1;
   let aimY = player.angle ? Math.sin(player.angle) : 0;
-  if (mouse.active && !touch.shooting) {
-    const targetX = camera.x + mouse.x;
-    const targetY = camera.y + mouse.y;
-    const aimDx = targetX - player.x;
-    const aimDy = targetY - player.y;
+  if (mouse.down) {
+    const targetX = camera.x + mouse.x, targetY = camera.y + mouse.y;
+    const aimDx = targetX - player.x, aimDy = targetY - player.y;
     const aimLength = Math.hypot(aimDx, aimDy);
     if (aimLength > 1) { aimX = aimDx / aimLength; aimY = aimDy / aimLength; }
+  } else if (touch.shooting) {
+    let nearest = null, nearestDistance = 700;
+    for (const enemy of world.enemies) {
+      const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+      if (distance < nearestDistance) { nearest = enemy; nearestDistance = distance; }
+    }
+    if (nearest) {
+      const aimDx = nearest.x - player.x, aimDy = nearest.y - player.y;
+      const aimLength = Math.hypot(aimDx, aimDy) || 1;
+      aimX = aimDx / aimLength; aimY = aimDy / aimLength;
+    } else if (Math.hypot(dx, dy) > 0.05) {
+      const len = Math.hypot(dx, dy); aimX = dx / len; aimY = dy / len;
+    }
   } else if (Math.hypot(dx, dy) > 0.05) {
     const len = Math.hypot(dx, dy); aimX = dx / len; aimY = dy / len;
   }
