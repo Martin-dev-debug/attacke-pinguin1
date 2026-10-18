@@ -19,6 +19,7 @@
       <input id="playerName" maxlength="16" value="Pinguin" autocomplete="nickname">
 
       <button id="soloBtn" class="primary">Solo spielen</button>
+      <button id="openMetaMenuBtn" class="secondary">Skins · Boxen · Pass</button>
       <button id="createBtn" class="secondary">Gruppe erstellen</button>
 
       <div class="separator"><span>ODER BEITRETEN</span></div>
@@ -39,7 +40,7 @@
         <div class="stat"><small>GEGNER</small><strong id="enemiesStat">0</strong></div>
         <div class="stat"><small>SCHNEEBÄLLE</small><strong id="snowStat">15</strong></div><div class="stat"><small>WAFFE</small><strong id="weaponStat">Stufe 1</strong></div>
       </div>
-      <div class="top-actions"><button id="restartBtn" class="pause-button">Neu starten</button><button id="pauseBtn" class="pause-button">Pause</button><button id="leaveBtn" class="pause-button">Verlassen</button></div>
+      <div class="top-actions"><button id="openMetaGameBtn" class="pause-button">Skins / Pass</button><button id="restartBtn" class="pause-button">Neu starten</button><button id="pauseBtn" class="pause-button">Pause</button><button id="leaveBtn" class="pause-button">Verlassen</button></div>
     </header>
 
     <div class="game-layout">
@@ -114,6 +115,19 @@
         <div id="upgradeChoices" class="upgrade-choices"></div>
       </div>
     </div>
+  <div id="metaOverlay" class="upgrade-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="metaTitle">
+    <div class="upgrade-card meta-card">
+      <div class="meta-head"><div><p class="eyebrow">DEINE SAMMLUNG</p><h2 id="metaTitle">Skins, Boxen & Pass</h2></div><button id="closeMetaBtn" class="secondary">Schließen</button></div>
+      <p class="meta-currency">Münzen: <strong id="metaCoins">0</strong> · Pass-EP: <strong id="metaXP">0</strong></p>
+      <p id="metaPassText" class="upgrade-subtitle">Besiege Gegner, sammle Pass-EP und öffne Boxen.</p>
+      <div class="meta-progress"><span id="metaPassFill"></span></div>
+      <div id="metaBoxTrack" class="meta-box-track"></div>
+      <h3>Charakter-Skins</h3>
+      <p id="skinPreviewText" class="upgrade-subtitle">Wähle „Ansehen“, bevor du einen Skin kaufst.</p>
+      <div id="skinShop" class="skin-shop"></div>
+      <p class="muted">Kostenloser Pass: EP und Boxen. Premium-Pass-Platzhalter ist sichtbar, aber noch nicht mit echtem Geldkauf verbunden.</p>
+    </div>
+  </div>
   <div id="runOverOverlay" class="upgrade-overlay hidden" role="dialog" aria-modal="true">
     <div class="upgrade-card wheel-card">
       <p class="eyebrow">RUN BEENDET</p>
