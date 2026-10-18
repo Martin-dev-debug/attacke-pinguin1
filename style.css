@@ -169,11 +169,12 @@ input:focus{border-color:var(--cyan)}
 @media(max-width:900px){.progression-card{grid-column:1/-1}}
 
 /* 3D-Spielansicht: die alte 2D-Canvas bleibt unsichtbar als Physik-/UI-Kompatibilitätsschicht. */
-#game{display:none!important}
+#game{display:block!important;position:absolute;left:0;top:0;width:100%;height:auto;aspect-ratio:8/5;opacity:0;pointer-events:none;z-index:0}
 #game3d{position:relative;z-index:1;width:100%;height:auto;aspect-ratio:8/5;display:block;touch-action:none;background:#cfe5ec}
 .game-panel{isolation:isolate}
 .game-panel .game-message,.game-panel .pause-overlay,.game-panel .boss-bar,.game-panel .progress-panel,.game-panel .mobile-controls,.game-panel .canvas-help{z-index:20}
 @media (max-width:900px) and (orientation:landscape){
+  #game{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:auto}
   #game3d{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:auto}
 }
 
