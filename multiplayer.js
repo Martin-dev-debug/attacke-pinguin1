@@ -248,8 +248,8 @@ function handlePlayerJoin(conn, data) {
   const player = makePlayer(
     id,
     String(data.name || "Pinguin").slice(0, 16),
-    random(100, world.width - 100),
-    random(100, world.height - 100),
+    (world.minX || 0) + random(100, world.width - 100),
+    (world.minY || 0) + random(100, world.height - 100),
     false
   );
 
@@ -408,6 +408,8 @@ function makeSnapshot() {
   return {
     width: world.width,
     height: world.height,
+    minX: world.minX || 0, minY: world.minY || 0,
+    kills: world.kills || 0, bossDefeated: world.bossDefeated || 0, bossSpawnedAtLevel: world.bossSpawnedAtLevel || 0,
     level: world.level,
 
     players: world.players.map(p => ({
@@ -429,6 +431,8 @@ function makeSnapshot() {
       extraProjectiles: p.extraProjectiles || 0,
       pickupRadius: p.pickupRadius || 0,
       damageReduction: p.damageReduction || 0,
+      piercing: p.piercing || 0,
+      blastRadius: p.blastRadius || 0,
       maxHp: p.maxHp || 100,
       alive: p.alive
     })),
@@ -470,7 +474,9 @@ function applySnapshot(data) {
 
   world.width = data.width;
   world.height = data.height;
-  world.level = data.level;
+  world.minX = data.minX || 0; world.minY = data.minY || 0;
+  world.kills = data.kills || 0; world.bossDefeated = data.bossDefeated || 0; world.bossSpawnedAtLevel = data.bossSpawnedAtLevel || 0;
+  world.level = data.level,
 
   world.players = data.players || [];
   world.enemies = data.enemies || [];
