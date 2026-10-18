@@ -135,3 +135,87 @@ if (runRestartBtn) runRestartBtn.addEventListener("click", () => {
 });
 const runMenuBtn = document.getElementById("runMenuBtn");
 if (runMenuBtn) runMenuBtn.addEventListener("click", () => returnToMenu());
+
+/* Persistent cosmetics and free battle-pass reward track */
+const META_SKINS = [
+  {id:"classic",name:"Klassischer Pinguin",cost:0,color:"#202b35",description:"Der ursprüngliche Pinguin."},
+  {id:"arctic",name:"Arktis",cost:40,color:"#52cde8",description:"Eisblauer Look."},
+  {id:"forest",name:"Waldläufer",cost:60,color:"#2b7a56",description:"Dunkelgrüner Outdoor-Look."},
+  {id:"magma",name:"Magma",cost:80,color:"#c84b35",description:"Rot-oranger seltener Skin."},
+  {id:"royal",name:"Königlich",cost:120,color:"#7652b8",description:"Violetter Premium-Look."},
+  {id:"gold",name:"Goldpinguin",cost:200,color:"#d6a72c",description:"Goldener Endgame-Skin."}
+];
+let metaPreviewSkin = "classic";
+let metaWasPaused = false;
+function openMetaPanel() {
+  const overlay = document.getElementById("metaOverlay");
+  if (!overlay) return;
+  metaWasPaused = paused;
+  if (running && !paused && !gameOver) setPaused(true);
+  overlay.classList.remove("hidden");
+  renderMetaPanel();
+}
+function closeMetaPanel() {
+  const overlay = document.getElementById("metaOverlay");
+  if (overlay) overlay.classList.add("hidden");
+  if (running && !gameOver && !metaWasPaused) setPaused(false);
+}
+function renderMetaPanel() {
+  const meta = loadMetaProgress();
+  const coinsNode=document.getElementById("metaCoins"), xpNode=document.getElementById("metaXP");
+  if(coinsNode) coinsNode.textContent=String(meta.coins||0);
+  if(xpNode) xpNode.textContent=String(meta.passXP||0);
+  const xp=Number(meta.passXP)||0, next=((Math.floor(xp/5)+1)*5);
+  const textNode=document.getElementById("metaPassText"), fill=document.getElementById("metaPassFill");
+  if(textNode) textNode.textContent=(next-xp)+" Gegner bis zur nächsten Pass-Box · jede Box gibt Münzen.";
+  if(fill) fill.style.width=((xp%5)/5*100)+"%";
+  const track=document.getElementById("metaBoxTrack");
+  if(track){
+    track.replaceChildren();
+    const claimed=new Set(meta.claimedBoxes||[]);
+    const total=Math.max(5,Math.ceil(xp/5)*5);
+    for(let milestone=5;milestone<=total+5;milestone+=5){
+      const box=document.createElement("button");
+      box.className="meta-box"+(xp>=milestone?" ready":"");
+      box.textContent=claimed.has(milestone)?"✓":(xp>=milestone?"🎁":"🔒");
+      box.title="Pass-Box bei "+milestone+" EP";
+      box.disabled=xp<milestone||claimed.has(milestone);
+      box.addEventListener("click",()=>{
+        const latest=loadMetaProgress();latest.claimedBoxes=Array.isArray(latest.claimedBoxes)?latest.claimedBoxes:[];
+        if((latest.passXP||0)<milestone||latest.claimedBoxes.includes(milestone))return;
+        latest.claimedBoxes.push(milestone);latest.coins=(latest.coins||0)+35+Math.floor(Math.random()*26);
+        try{localStorage.setItem("attackePinguinMeta",JSON.stringify(latest));}catch(_){}
+        const p=localPlayer();if(p){p.coins=latest.coins;}
+        notify("Pass-Box geöffnet: Münzen erhalten!",2500);renderMetaPanel();
+      });
+      track.appendChild(box);
+    }
+  }
+  const shop=document.getElementById("skinShop");
+  if(shop){
+    shop.replaceChildren();
+    const owned=new Set(meta.ownedSkins||["classic"]);
+    for(const skin of META_SKINS){
+      const card=document.createElement("div");card.className="skin-card"+(metaPreviewSkin===skin.id?" selected":"");
+      const preview=document.createElement("div");preview.className="skin-preview";preview.style.background=skin.color;preview.textContent="🐧";
+      const title=document.createElement("strong");title.textContent=skin.name;
+      const desc=document.createElement("p");desc.textContent=skin.description;
+      const cost=document.createElement("small");cost.textContent=owned.has(skin.id)?"Freigeschaltet":skin.cost+" Münzen";
+      const previewBtn=document.createElement("button");previewBtn.className="secondary";previewBtn.textContent="Ansehen";
+      previewBtn.addEventListener("click",()=>{metaPreviewSkin=skin.id;const n=document.getElementById("skinPreviewText");if(n)n.textContent=skin.name+": "+skin.description;renderMetaPanel();});
+      const buyBtn=document.createElement("button");buyBtn.className="primary";
+      if(owned.has(skin.id)){
+        buyBtn.textContent=meta.skin===skin.id?"Ausgewählt":"Auswählen";
+        buyBtn.addEventListener("click",()=>{const latest=loadMetaProgress();latest.skin=skin.id;try{localStorage.setItem("attackePinguinMeta",JSON.stringify(latest));}catch(_){}const p=localPlayer();if(p)p.skin=skin.id;metaPreviewSkin=skin.id;renderMetaPanel();notify(skin.name+" ausgerüstet!",1800);});
+      }else{
+        buyBtn.textContent="Kaufen";
+        buyBtn.disabled=metaPreviewSkin!==skin.id||(meta.coins||0)<skin.cost;
+        buyBtn.addEventListener("click",()=>{const latest=loadMetaProgress();if(metaPreviewSkin!==skin.id||(latest.coins||0)<skin.cost)return;latest.coins-=skin.cost;latest.ownedSkins=Array.isArray(latest.ownedSkins)?latest.ownedSkins:["classic"];if(!latest.ownedSkins.includes(skin.id))latest.ownedSkins.push(skin.id);try{localStorage.setItem("attackePinguinMeta",JSON.stringify(latest));}catch(_){}const p=localPlayer();if(p)p.coins=latest.coins;notify(skin.name+" gekauft! Du kannst ihn jetzt auswählen.",2200);renderMetaPanel();});
+      }
+      card.append(preview,title,desc,cost,previewBtn,buyBtn);shop.appendChild(card);
+    }
+  }
+}
+for(const id of ["openMetaMenuBtn","openMetaGameBtn"]){const btn=document.getElementById(id);if(btn)btn.addEventListener("click",openMetaPanel);}
+const closeMetaBtn=document.getElementById("closeMetaBtn");if(closeMetaBtn)closeMetaBtn.addEventListener("click",closeMetaPanel);
+const metaOverlay=document.getElementById("metaOverlay");if(metaOverlay)metaOverlay.addEventListener("click",event=>{if(event.target===metaOverlay)closeMetaPanel();});
