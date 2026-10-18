@@ -35,6 +35,12 @@ function updateHost(dt, now) {
   if (!isHost || gameOver) return;
   ensureEndlessWorld();
 
+  // Upgrade-Auswahl pausiert die komplette Welt, nicht nur den betroffenen Spieler.
+  // Gegner, Geschosse, Level-Timer und Schaden stehen still, bis gewählt wurde.
+  if (world.players.some(player => player.alive && player.pendingUpgradeChoices && player.pendingUpgradeChoices.length)) {
+    return;
+  }
+
   // Das Level steigt garantiert mit der Spielzeit, auch wenn noch Gegner leben.
   if (!gameStartedAt) {
     gameStartedAt = now;
