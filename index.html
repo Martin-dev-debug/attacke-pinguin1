@@ -46,7 +46,9 @@
       <section class="game-panel">
         <canvas id="game" width="960" height="600" aria-label="Spielfeld"></canvas>
         <div id="notice" class="game-message" role="status" aria-live="polite"></div><div id="pauseOverlay" class="pause-overlay hidden" role="dialog" aria-modal="true"><div class="pause-card"><p class="eyebrow">SPIEL PAUSIERT</p><h2>Kurze Pause</h2><p>Dein Spiel steht still, bis du fortsetzt.</p><button id="resumeBtn" class="primary">Weiter spielen</button><button id="pauseLeaveBtn" class="secondary">Spiel verlassen</button></div></div>
-        <div class="canvas-help">WASD bewegen · Maus zielen/werfen · E Wand · H Haus</div>
+        <div id="bossBar" class="boss-bar hidden"><strong id="bossBarLabel">EISRIESE</strong><div class="boss-bar-track"><span id="bossBarFill"></span></div></div>
+        <div class="progress-panel"><span id="upgradeProgressText">50 Schneebälle bis Upgrade</span><div class="progress-track"><span id="upgradeProgress"></span></div></div>
+        <div class="canvas-help">WASD bewegen · Maustaste halten zum Zielen und Werfen · E Wand · H Haus</div>
         <div class="mobile-controls">
           <div id="joystick" class="joystick" aria-label="Bewegungsjoystick">
             <div id="stick" class="stick"></div>
@@ -83,6 +85,7 @@
     </div>
   </main>
 
+    <div id="gameOverStats" class="game-over-stats hidden"></div>
     <div id="upgradeOverlay" class="upgrade-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="upgradeTitle">
       <div class="upgrade-card">
         <p class="eyebrow">UPGRADE FREIGESCHALTET</p>
