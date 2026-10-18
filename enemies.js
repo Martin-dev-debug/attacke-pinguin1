@@ -35,6 +35,15 @@ function spawnEnemy() {
 function updateHost(dt, now) {
   if (!isHost || gameOver) return;
   ensureEndlessWorld();
+  if (world.players.length && world.players.every(player => !player.alive)) {
+    gameOver = true;
+    paused = false;
+    const local = localPlayer();
+    if (local) saveMetaProgress(local);
+    const overlay = document.getElementById("runOverOverlay");
+    if (overlay) overlay.classList.remove("hidden");
+    return;
+  }
 
   // Upgrade-Auswahl pausiert die komplette Welt, nicht nur den betroffenen Spieler.
   // Gegner, Geschosse, Level-Timer und Schaden stehen still, bis gewählt wurde.
@@ -58,18 +67,7 @@ function updateHost(dt, now) {
   }
 
   for (const player of world.players) {
-    if (!player.alive) {
-      if (player.respawnAt && now >= player.respawnAt) {
-        player.alive = true;
-        player.hp = player.maxHp || 100;
-        player.x += random(-120, 120);
-        player.y += random(-120, 120);
-        player.respawnAt = 0;
-        if (player.id === localId) notify("Du bist wieder im Spiel!", 2500);
-      } else {
-        continue;
-      }
-    }
+    if (!player.alive) continue;
 
     if (player.regenPerSecond > 0 && player.hp > 0) player.hp = Math.min(player.maxHp || 100, player.hp + player.regenPerSecond * dt);
     if (player.shieldUntil && now >= player.shieldUntil) player.shieldUntil = 0;
@@ -83,6 +81,23 @@ function updateHost(dt, now) {
       : player.input;
 
     player.input = input;
+
+    if (input.revive) {
+      const downed = world.players.filter(p => p.id !== player.id && !p.alive)
+        .sort((a,b) => Math.hypot(a.x-player.x,a.y-player.y) - Math.hypot(b.x-player.x,b.y-player.y))[0];
+      if (downed && Math.hypot(downed.x-player.x,downed.y-player.y) < 70) {
+        downed.reviveProgress = (downed.reviveProgress || 0) + dt;
+        if (downed.reviveProgress >= 2.5) {
+          downed.alive = true;
+          downed.hp = Math.max(35, Math.ceil((downed.maxHp || 100) * 0.35));
+          downed.respawnAt = 0;
+          downed.reviveProgress = 0;
+          downed.x = player.x + random(-35,35);
+          downed.y = player.y + random(-35,35);
+          notify(downed.name + " wurde wiederbelebt!", 3000);
+        }
+      }
+    }
 
     if (Math.hypot(input.aimX, input.aimY) > 0.05) {
       player.angle = Math.atan2(input.aimY, input.aimX);
@@ -201,7 +216,7 @@ function updateHost(dt, now) {
       for (const player of world.players) {
         if (player.alive && Math.hypot(player.x - enemy.x, player.y - enemy.y) < 155) {
           player.hp -= 24 * (1 - Math.min(0.7, player.damageReduction || 0));
-          if (player.hp <= 0) { player.hp = 0; player.alive = false; player.respawnAt = now + 6000; dropSnow(player.x, player.y, 8); }
+          if (player.hp <= 0) { player.hp = 0; player.alive = false; player.downedAt = now; player.respawnAt = 0; dropSnow(player.x, player.y, 8); }
         }
       }
     }
@@ -216,7 +231,8 @@ function updateHost(dt, now) {
       if (target.hp <= 0) {
         target.hp = 0;
         target.alive = false;
-        target.respawnAt = now + 6000;
+        target.downedAt = now;
+        target.respawnAt = 0;
         dropSnow(target.x, target.y, 8);
       }
     }
@@ -268,6 +284,7 @@ function updateHost(dt, now) {
             killer.coins = (killer.coins || 0) + tier * 2;
             killer.hp = Math.min(killer.maxHp || 100, killer.hp + (killer.killHeal || 0));
             if (killer.kills % 10 === 0) { killer.coins += 10; if (killer.id === localId) notify("Belohnungspfad: +10 Münzen!", 2200); }
+            saveMetaProgress(killer);
           }
           if (enemy.type === "boss") { world.bossDefeated = (world.bossDefeated || 0) + 1; unlockAchievement("first-boss", "Eisriese besiegt"); dropSnow(enemy.x, enemy.y, 30 + Math.floor(world.level / 2)); }
           const bonus = killer ? (killer.dropBonus || 0) : 0;
