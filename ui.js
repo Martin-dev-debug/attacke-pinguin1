@@ -34,6 +34,10 @@ function menuStatus(text) {
 
 
 function returnToMenu() {
+  const over = document.getElementById("runOverOverlay");
+  if (over) over.classList.add("hidden");
+  const meta = document.getElementById("metaOverlay");
+  if (meta) meta.classList.add("hidden");
   running = false;
   document.body.classList.remove("game-running");
   paused = false;
