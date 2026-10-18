@@ -3,6 +3,8 @@
 function resetWorld() {
   world.width = 1800;
   world.height = 1400;
+  world.minX = 0; world.minY = 0;
+  world.kills = 0; world.bossDefeated = 0; world.bossSpawnedAtLevel = 0;
   world.level = 1;
   world.players = [];
   world.enemies = [];
@@ -53,14 +55,22 @@ function blocked(x, y, radius) {
 
 
 function ensureEndlessWorld() {
-  // Wichtig: Niemals Spieler oder Weltobjekte verschieben. Das verursachte
-  // Teleports, sobald jemand in die Nähe des alten Kartenrands kam.
-  // Die Spielfläche hat keine Begrenzung; diese Werte dienen nur der Minimap
-  // und werden rein anhand positiver Koordinaten vergrößert.
+  let minX = 0, minY = 0, maxX = 1800, maxY = 1400;
   for (const p of world.players) {
-    if (p.x > world.width - 600) world.width = Math.ceil((p.x + 1200) / 600) * 600;
-    if (p.y > world.height - 500) world.height = Math.ceil((p.y + 1000) / 500) * 500;
+    minX = Math.min(minX, Math.floor((p.x - 900) / 600) * 600);
+    minY = Math.min(minY, Math.floor((p.y - 700) / 500) * 500);
+    maxX = Math.max(maxX, Math.ceil((p.x + 900) / 600) * 600);
+    maxY = Math.max(maxY, Math.ceil((p.y + 700) / 500) * 500);
   }
+  world.minX = minX; world.minY = minY;
+  world.width = Math.max(1800, maxX - minX);
+  world.height = Math.max(1400, maxY - minY);
+}
+
+function getBiomeAt(x, y) {
+  const cx = Math.floor(x / 1600), cy = Math.floor(y / 1600);
+  const biomes = ["snowfield", "frostforest", "frozenlake", "crystalcaves", "researchstation"];
+  return biomes[((cx * 3 + cy * 5) % biomes.length + biomes.length) % biomes.length];
 }
 
 
@@ -76,10 +86,32 @@ function updateCamera() {
 
 
 function drawGround() {
-  ctx.fillStyle = "#d8edf0";
-  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-
-  ctx.strokeStyle = "#c5e0e5";
+  const biome = getBiomeAt(camera.x + VIEW_W / 2, camera.y + VIEW_H / 2);
+  const palettes = {
+    snowfield: ["#d8edf0", "#c5e0e5"], frostforest: ["#c8e2d6", "#a9cdbd"],
+    frozenlake: ["#b7e5f2", "#8ecbdf"], crystalcaves: ["#d9d1f0", "#b5a6db"],
+    researchstation: ["#cbd3d8", "#aab8c1"]
+  };
+  const palette = palettes[biome] || palettes.snowfield;
+  ctx.fillStyle = palette[0]; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  const size = 160, sx = Math.floor(camera.x / size) * size, sy = Math.floor(camera.y / size) * size;
+  for (let wx = sx; wx < camera.x + VIEW_W + size; wx += size) {
+    for (let wy = sy; wy < camera.y + VIEW_H + size; wy += size) {
+      const hash = Math.abs(Math.sin(wx * 12.9898 + wy * 78.233) * 43758.5453) % 1;
+      const x = wx - camera.x + 22 + hash * 70, y = wy - camera.y + 20 + ((hash * 1.71) % 1) * 85;
+      if (biome === "frostforest" && hash > .48) {
+        ctx.fillStyle = "#7fae9d"; ctx.beginPath(); ctx.arc(x,y,8+hash*7,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle = "#d5ebe2"; ctx.beginPath(); ctx.arc(x-2,y-3,4+hash*3,0,Math.PI*2); ctx.fill();
+      } else if (biome === "frozenlake" && hash > .35) {
+        ctx.strokeStyle="#e6fbff";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-12,y-5);ctx.lineTo(x+13,y+4);ctx.stroke();
+      } else if (biome === "crystalcaves" && hash > .52) {
+        ctx.fillStyle="#8d79c5";ctx.beginPath();ctx.moveTo(x,y-13);ctx.lineTo(x+8,y+4);ctx.lineTo(x-7,y+5);ctx.closePath();ctx.fill();
+      } else if (biome === "researchstation" && hash > .72) {
+        ctx.fillStyle="#9aaab4";ctx.fillRect(x-9,y-7,18,14);ctx.strokeStyle="#e8f0f4";ctx.strokeRect(x-9,y-7,18,14);
+      }
+    }
+  }
+  ctx.strokeStyle = palette[1];
   ctx.lineWidth = 1;
 
   const grid = 80;
@@ -166,6 +198,7 @@ function drawPlayer(player) {
 
 
 function drawWorld() {
+  if (!gameOver && gameOverStats) gameOverStats.classList.add("hidden");
   drawGround();
 
   for (const house of world.houses) {
@@ -232,6 +265,10 @@ function drawWorld() {
       armored: "#687783", elite: "#d83c91", boss: "#7e45b8",
       crystal: "#39d9a7", phantom: "#5144a8"
     };
+    if (enemy.type === "boss" && enemy.warning > 0) {
+      ctx.strokeStyle = "#ff6464"; ctx.lineWidth = 4; ctx.globalAlpha = 0.35 + (enemy.warning / 0.9) * 0.45;
+      ctx.beginPath(); ctx.arc(x, y, 155, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+    }
     ctx.fillStyle = enemyColors[enemy.type] || enemyColors.normal;
     ctx.beginPath();
     if (enemy.type === "crystal") {
@@ -315,6 +352,7 @@ function drawWorld() {
   }
 
   if (gameOver) {
+    if (gameOverStats) gameOverStats.classList.remove("hidden");
     ctx.fillStyle = "#08131bd9";
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 
@@ -335,13 +373,15 @@ function drawMinimap() {
 
   const sx = w / world.width;
   const sy = h / world.height;
+  const mapX = x => (x - (world.minX || 0)) * sx;
+  const mapY = y => (y - (world.minY || 0)) * sy;
 
   mctx.fillStyle = "#a9784e";
 
   for (const house of world.houses) {
     mctx.fillRect(
-      house.x * sx,
-      house.y * sy,
+      mapX(house.x),
+      mapY(house.y),
       Math.max(2, house.w * sx),
       Math.max(2, house.h * sy)
     );
@@ -351,8 +391,8 @@ function drawMinimap() {
 
   for (const wall of world.walls) {
     mctx.fillRect(
-      wall.x * sx,
-      wall.y * sy,
+      mapX(wall.x),
+      mapY(wall.y),
       Math.max(2, wall.w * sx),
       Math.max(2, wall.h * sy)
     );
@@ -362,14 +402,14 @@ function drawMinimap() {
 
   for (const enemy of world.enemies) {
     mctx.beginPath();
-    mctx.arc(enemy.x * sx, enemy.y * sy, 2.4, 0, Math.PI * 2);
+    mctx.arc(mapX(enemy.x), mapY(enemy.y), 2.4, 0, Math.PI * 2);
     mctx.fill();
   }
 
   for (const player of world.players) {
     mctx.fillStyle = player.id === localId ? "#25821f" : "#1673bd";
     mctx.beginPath();
-    mctx.arc(player.x * sx, player.y * sy, 3.5, 0, Math.PI * 2);
+    mctx.arc(mapX(player.x), mapY(player.y), 3.5, 0, Math.PI * 2);
     mctx.fill();
   }
 
