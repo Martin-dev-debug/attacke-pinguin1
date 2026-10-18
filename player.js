@@ -4,11 +4,13 @@ function loadMetaProgress() {
   try { return JSON.parse(localStorage.getItem("attackePinguinMeta") || '{"coins":0,"ownedSkins":["classic"],"skin":"classic","passXP":0}'); }
   catch (_) { return { coins: 0, ownedSkins: ["classic"], skin: "classic", passXP: 0 }; }
 }
-function saveMetaProgress(player) {
+function saveMetaProgress(player, addPassXP = 0) {
   if (!player || player.id !== localId) return;
   const meta = loadMetaProgress();
   meta.coins = Math.max(0, Math.floor(player.coins || 0));
-  meta.passXP = Math.max(meta.passXP || 0, player.kills || 0);
+  meta.passXP = Math.max(0, Number(meta.passXP) || 0) + Math.max(0, Number(addPassXP) || 0);
+  meta.ownedSkins = Array.isArray(meta.ownedSkins) ? meta.ownedSkins : ["classic"];
+  meta.claimedBoxes = Array.isArray(meta.claimedBoxes) ? meta.claimedBoxes : [];
   try { localStorage.setItem("attackePinguinMeta", JSON.stringify(meta)); } catch (_) {}
 }
 function makePlayer(id, name, x, y, local = false) {
