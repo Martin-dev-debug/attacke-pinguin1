@@ -124,15 +124,29 @@ const camera = { x: 0, y: 0 };
 
 
 const UPGRADE_POOL = [
-  { id: "power", title: "Stärkere Schneebälle", description: "+10 Schaden pro Treffer.", icon: "❄", apply: p => { p.damageBonus = (p.damageBonus || 0) + 10; } },
-  { id: "rapid", title: "Schnellfeuer", description: "Wirf Schneebälle 15 % schneller.", icon: "⚡", apply: p => { p.fireRateMultiplier = Math.max(0.45, (p.fireRateMultiplier || 1) * 0.85); } },
-  { id: "multi", title: "Mehrfachwurf", description: "Wirf pro Angriff einen zusätzlichen Schneeball.", icon: "✦", apply: p => { p.extraProjectiles = Math.min(4, (p.extraProjectiles || 0) + 1); } },
-  { id: "speed", title: "Pinguin-Sprint", description: "+25 Bewegungsgeschwindigkeit.", icon: "➤", apply: p => { p.speed = Math.min(360, (p.speed || 220) + 25); } },
-  { id: "vitality", title: "Eisiges Herz", description: "+25 maximale Lebenspunkte und heilt 25.", icon: "♥", apply: p => { p.maxHp = (p.maxHp || 100) + 25; p.hp = Math.min(p.maxHp, p.hp + 25); } },
-  { id: "armor", title: "Schneepanzer", description: "Du erleidest 12 % weniger Kontaktschaden.", icon: "⬡", apply: p => { p.damageReduction = Math.min(0.6, (p.damageReduction || 0) + 0.12); } },
-  { id: "magnet", title: "Schneemagnet", description: "Sammle Schneebälle aus größerer Entfernung ein.", icon: "◎", apply: p => { p.pickupRadius = Math.min(100, (p.pickupRadius || 0) + 22); } },
-  { id: "piercing", title: "Durchschlagskraft", description: "Schneebälle durchdringen einen zusätzlichen Gegner.", icon: "➶", apply: p => { p.piercing = Math.min(5, (p.piercing || 0) + 1); } },
-  { id: "blast", title: "Schneeball-Bombe", description: "Treffer verursachen kleinen Flächenschaden.", icon: "✹", apply: p => { p.blastRadius = Math.min(100, (p.blastRadius || 0) + 24); } }
+  { id: "power", title: "Eisgeschoss", description: "+10 Schneeball-Schaden.", icon: "❄", apply: p => { p.damageBonus = (p.damageBonus || 0) + 10; } },
+  { id: "rapid", title: "Schnellfeuer", description: "15 % schneller werfen.", icon: "⚡", apply: p => { p.fireRateMultiplier = Math.max(0.35, (p.fireRateMultiplier || 1) * 0.85); } },
+  { id: "multi", title: "Dreifachwurf", description: "+1 Schneeball pro Angriff.", icon: "✦", apply: p => { p.extraProjectiles = Math.min(5, (p.extraProjectiles || 0) + 1); } },
+  { id: "speed", title: "Pinguin-Sprint", description: "+22 Bewegungsgeschwindigkeit.", icon: "➤", apply: p => { p.speed = Math.min(390, (p.speed || 220) + 22); } },
+  { id: "vitality", title: "Eisiges Herz", description: "+30 maximale HP und heilt 30.", icon: "♥", apply: p => { p.maxHp = (p.maxHp || 100) + 30; p.hp = Math.min(p.maxHp, p.hp + 30); } },
+  { id: "armor", title: "Schneepanzer", description: "12 % weniger Kontaktschaden.", icon: "⬡", apply: p => { p.damageReduction = Math.min(0.65, (p.damageReduction || 0) + 0.12); } },
+  { id: "magnet", title: "Schneemagnet", description: "Sammle Schneebälle weiter entfernt ein.", icon: "◎", apply: p => { p.pickupRadius = Math.min(150, (p.pickupRadius || 0) + 24); } },
+  { id: "piercing", title: "Durchschlagskraft", description: "Schneebälle durchdringen +1 Gegner.", icon: "➶", apply: p => { p.piercing = Math.min(7, (p.piercing || 0) + 1); } },
+  { id: "blast", title: "Schneeball-Bombe", description: "+24 Explosionsradius bei Treffern.", icon: "✹", apply: p => { p.blastRadius = Math.min(130, (p.blastRadius || 0) + 24); } },
+  { id: "regen", title: "Schneeregen", description: "Regeneriert 2 HP pro Sekunde.", icon: "✚", apply: p => { p.regenPerSecond = (p.regenPerSecond || 0) + 2; } },
+  { id: "bigregen", title: "Tiefenheilung", description: "Heilt sofort 45 HP.", icon: "❣", apply: p => { p.hp = Math.min(p.maxHp || 100, p.hp + 45); } },
+  { id: "lifesteal", title: "Eisklauenkraft", description: "Heilt 2 HP bei jedem besiegten Gegner.", icon: "🧊", apply: p => { p.killHeal = (p.killHeal || 0) + 2; } },
+  { id: "crit", title: "Eis-Krit", description: "12 % Chance auf doppelten Schaden.", icon: "✳", apply: p => { p.critChance = Math.min(0.6, (p.critChance || 0) + 0.12); } },
+  { id: "heavyshot", title: "Riesenschneeball", description: "Größere Schneebälle mit +15 Schaden.", icon: "●", apply: p => { p.damageBonus = (p.damageBonus || 0) + 15; p.shotSize = (p.shotSize || 6) + 2; } },
+  { id: "dash", title: "Turbo-Flossen", description: "+10 % Bewegungstempo.", icon: "»", apply: p => { p.speed = Math.min(390, (p.speed || 220) * 1.10); } },
+  { id: "maxhp", title: "Dicke Eisschicht", description: "+50 maximale HP.", icon: "▣", apply: p => { p.maxHp = (p.maxHp || 100) + 50; p.hp = Math.min(p.maxHp, p.hp + 20); } },
+  { id: "doubleheal", title: "Erste-Hilfe-Iglu", description: "Heilt sofort 25 % deiner maximalen HP.", icon: "⛑", apply: p => { p.hp = Math.min(p.maxHp || 100, p.hp + Math.ceil((p.maxHp || 100) * 0.25)); } },
+  { id: "frost", title: "Frostspur", description: "Gegner werden durch Treffer kurz gebremst.", icon: "❅", apply: p => { p.slowChance = Math.min(0.75, (p.slowChance || 0) + 0.15); } },
+  { id: "doublecoins", title: "Schneeball-Bonus", description: "Mehr Schneebälle von besiegten Gegnern.", icon: "✧", apply: p => { p.dropBonus = (p.dropBonus || 0) + 2; } },
+  { id: "longshot", title: "Fernwurf", description: "Schneebälle fliegen 20 % schneller.", icon: "➤", apply: p => { p.projectileSpeedBonus = (p.projectileSpeedBonus || 0) + 0.2; } },
+  { id: "shield", title: "Eisschild", description: "Erhält einen kurzen Schutzschild.", icon: "◈", apply: p => { p.shieldCharges = (p.shieldCharges || 0) + 1; } },
+  { id: "secondwind", title: "Zweiter Atem", description: "Bei Wiederbelebung mit voller HP starten.", icon: "↻", apply: p => { p.respawnHealBonus = true; } },
+  { id: "fortune", title: "Glückspinguin", description: "10 % Chance auf doppelte Schneeball-Drops.", icon: "★", apply: p => { p.luckyDrops = Math.min(0.6, (p.luckyDrops || 0) + 0.1); } }
 ];
 
 
