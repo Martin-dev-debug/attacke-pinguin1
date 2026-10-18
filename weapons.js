@@ -52,7 +52,7 @@ function buildFromClient(type) {
 
 function shoot(player, now) {
   const level = player.weaponLevel || 1;
-  const cooldown = Math.max(115, (380 - (level - 1) * 38) * (player.fireRateMultiplier || 1));
+  const cooldown = player.machineGun ? 65 : Math.max(115, (380 - (level - 1) * 38) * (player.fireRateMultiplier || 1));
   if (now - player.lastShot < cooldown) return;
   player.lastShot = now;
   if (player.id === localId) playSound("throw");
@@ -60,7 +60,7 @@ function shoot(player, now) {
   for (let i = 0; i < count; i++) {
     const offset = count === 1 ? 0 : (i - (count - 1) / 2) * (count >= 4 ? 0.16 : count === 3 ? 0.22 : 0.12);
     const angle = base + offset, vx = Math.cos(angle), vy = Math.sin(angle);
-    world.shots.push({x:player.x+vx*24,y:player.y+vy*24,vx:vx*(510+(level-1)*22),vy:vy*(510+(level-1)*22),owner:player.id,life:1.5,r:level>=4?8:6,damage:25+(level-1)*8+(player.damageBonus||0),piercing:player.piercing||0,blastRadius:player.blastRadius||0,hitIds:[]});
+    world.shots.push({x:player.x+vx*24,y:player.y+vy*24,vx:vx*(510+(level-1)*22)*(1+(player.projectileSpeedBonus||0)),vy:vy*(510+(level-1)*22)*(1+(player.projectileSpeedBonus||0)),owner:player.id,life:1.5,r:Math.max(6, player.shotSize || (level>=4?8:6)),damage:(25+(level-1)*8+(player.damageBonus||0))*(Math.random()<(player.critChance||0)?2:1),piercing:player.piercing||0,blastRadius:player.blastRadius||0,hitIds:[]});
   }
 }
 
