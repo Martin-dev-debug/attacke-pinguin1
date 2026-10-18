@@ -97,10 +97,11 @@ function updateUI(now) {
 
   for (const p of world.players) {
     const item = document.createElement("li");
+    const respawnSeconds = p.respawnAt ? Math.max(0, Math.ceil((p.respawnAt - now) / 1000)) : 0;
     item.textContent =
       p.name +
       (p.id === localId ? " (Du)" : "") +
-      (!p.alive ? " – KO" : "");
+      (!p.alive ? " – Wieder da in " + respawnSeconds + " s" : " · Level " + (p.level || 1));
 
     playerList.appendChild(item);
   }
