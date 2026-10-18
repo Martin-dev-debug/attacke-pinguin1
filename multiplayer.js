@@ -293,7 +293,8 @@ function sanitizeInput(input) {
     aimY: clamp(Number(input.aimY) || 0, -1, 1),
     shoot: !!input.shoot,
     wall: !!input.wall,
-    house: !!input.house
+    house: !!input.house,
+    revive: !!input.revive
   };
 }
 
@@ -421,6 +422,7 @@ function makeSnapshot() {
     minX: world.minX || 0, minY: world.minY || 0,
     kills: world.kills || 0, bossDefeated: world.bossDefeated || 0, bossSpawnedAtLevel: world.bossSpawnedAtLevel || 0,
     level: world.level,
+    gameOver: !!gameOver,
 
     players: world.players.map(p => ({
       id: p.id,
@@ -446,6 +448,22 @@ function makeSnapshot() {
       piercing: p.piercing || 0,
       blastRadius: p.blastRadius || 0,
       maxHp: p.maxHp || 100,
+      kills: p.kills || 0,
+      coins: p.coins || 0,
+      regenPerSecond: p.regenPerSecond || 0,
+      critChance: p.critChance || 0,
+      shotSize: p.shotSize || 6,
+      killHeal: p.killHeal || 0,
+      dropBonus: p.dropBonus || 0,
+      luckyDrops: p.luckyDrops || 0,
+      projectileSpeedBonus: p.projectileSpeedBonus || 0,
+      slowChance: p.slowChance || 0,
+      shieldCharges: p.shieldCharges || 0,
+      shieldUntil: p.shieldUntil || 0,
+      respawnHealBonus: !!p.respawnHealBonus,
+      pendingWheel: !!p.pendingWheel,
+      machineGun: !!p.machineGun,
+      reviveProgress: p.reviveProgress || 0,
       alive: p.alive
     })),
 
@@ -488,7 +506,10 @@ function applySnapshot(data) {
   world.height = data.height;
   world.minX = data.minX || 0; world.minY = data.minY || 0;
   world.kills = data.kills || 0; world.bossDefeated = data.bossDefeated || 0; world.bossSpawnedAtLevel = data.bossSpawnedAtLevel || 0;
-  world.level = data.level,
+  world.level = data.level;
+  gameOver = !!data.gameOver;
+  const runOverOverlay = document.getElementById("runOverOverlay");
+  if (runOverOverlay) runOverOverlay.classList.toggle("hidden", !gameOver);
 
   world.players = data.players || [];
   world.enemies = data.enemies || [];
