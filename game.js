@@ -203,11 +203,10 @@ window.addEventListener("keydown", event => {
 
   keys[key] = true;
 
-  if (
-    ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "]
-      .includes(event.key)
-  ) {
+  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(event.key)) event.preventDefault();
+  if (event.key.toLowerCase() === "e" && running && !gameOver && !event.repeat) {
     event.preventDefault();
+    setPaused(!paused);
   }
 });
 
@@ -402,11 +401,13 @@ if (restartBtn) restartBtn.addEventListener("click", () => {
   }
   isHost = wasHost; online = wasOnline; gameOver = false; paused = false;
   if (pauseOverlay) pauseOverlay.classList.add("hidden");
+  const runOverOverlay = document.getElementById("runOverOverlay");
+  if (runOverOverlay) runOverOverlay.classList.add("hidden");
   notify("Neue Runde gestartet!");
 });
 const resumeBtn=document.getElementById("resumeBtn");bindTap(resumeBtn,()=>setPaused(false));
 const pauseLeaveBtn=document.getElementById("pauseLeaveBtn");bindTap(pauseLeaveBtn,returnToMenu);
-window.addEventListener("keydown",event=>{if(event.key==="Escape"&&running){event.preventDefault();setPaused(!paused);}});
+window.addEventListener("keydown",event=>{if(event.key==="Escape"&&running&&!gameOver){event.preventDefault();setPaused(!paused);}});
 document.getElementById("soloBtn").addEventListener("click", () => {
   closeNetwork();
   resetWorld();
