@@ -265,6 +265,7 @@ function handlePlayerJoin(conn, data) {
 
   conn.playerId = id;
   player.coins = Math.max(0, Math.floor(Number(data.coins) || 0));
+  player.skin = String(data.skin || "classic");
   world.players.push(player);
 
   // Erst ID senden, dann den aktuellen Spielstand übertragen.
@@ -349,7 +350,8 @@ async function joinOnlineRoom() {
           hostConnection.send({
             type: "join",
             name: getName(),
-            coins: Math.max(0, Number(loadMetaProgress().coins) || 0)
+            coins: Math.max(0, Number(loadMetaProgress().coins) || 0),
+            skin: String(loadMetaProgress().skin || "classic")
           });
         }
         return;
