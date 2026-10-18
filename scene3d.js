@@ -1,7 +1,13 @@
 /* Attacke Pinguin — lightweight 3D renderer (Three.js) */
 (() => {
   const canvas = document.getElementById("game3d");
-  if (!canvas || !window.THREE) return;
+  if (!canvas) return;
+  if (!window.THREE) {
+    const fallback = document.getElementById("game");
+    if (fallback) fallback.style.opacity = "1";
+    canvas.style.display = "none";
+    return;
+  }
   const THREE = window.THREE;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
