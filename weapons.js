@@ -60,7 +60,7 @@ function shoot(player, now) {
   for (let i = 0; i < count; i++) {
     const offset = count === 1 ? 0 : (i - (count - 1) / 2) * (count >= 4 ? 0.16 : count === 3 ? 0.22 : 0.12);
     const angle = base + offset, vx = Math.cos(angle), vy = Math.sin(angle);
-    world.shots.push({x:player.x+vx*24,y:player.y+vy*24,vx:vx*(510+(level-1)*22),vy:vy*(510+(level-1)*22),owner:player.id,life:1.5,r:level>=4?8:6,damage:25+(level-1)*8+(player.damageBonus||0)});
+    world.shots.push({x:player.x+vx*24,y:player.y+vy*24,vx:vx*(510+(level-1)*22),vy:vy*(510+(level-1)*22),owner:player.id,life:1.5,r:level>=4?8:6,damage:25+(level-1)*8+(player.damageBonus||0),piercing:player.piercing||0,blastRadius:player.blastRadius||0,hitIds:[]});
   }
 }
 
