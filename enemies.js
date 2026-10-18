@@ -38,7 +38,7 @@ function updateHost(dt, now) {
 
   // Upgrade-Auswahl pausiert die komplette Welt, nicht nur den betroffenen Spieler.
   // Gegner, Geschosse, Level-Timer und Schaden stehen still, bis gewählt wurde.
-  if (world.players.some(player => player.alive && player.pendingUpgradeChoices && player.pendingUpgradeChoices.length)) {
+  if (world.players.some(player => player.alive && ((player.pendingUpgradeChoices && player.pendingUpgradeChoices.length) || player.pendingWheel))) {
     return;
   }
 
@@ -71,6 +71,8 @@ function updateHost(dt, now) {
       }
     }
 
+    if (player.regenPerSecond > 0 && player.hp > 0) player.hp = Math.min(player.maxHp || 100, player.hp + player.regenPerSecond * dt);
+    if (player.shieldUntil && now >= player.shieldUntil) player.shieldUntil = 0;
     if (player.pendingUpgradeChoices && player.pendingUpgradeChoices.length) {
       player.input = { dx: 0, dy: 0, aimX: Math.cos(player.angle || 0), aimY: Math.sin(player.angle || 0), shoot: false, wall: false, house: false };
       continue;
@@ -203,7 +205,9 @@ function updateHost(dt, now) {
       Math.hypot(target.x - enemy.x, target.y - enemy.y) <
       enemy.r + target.r
     ) {
-      target.hp -= (enemy.damage || 24) * (1 - Math.min(0.7, target.damageReduction || 0)) * dt;
+      if ((target.shieldCharges || 0) > 0 && !target.shieldUntil) { target.shieldCharges--; target.shieldUntil = performance.now() + 2500; }
+      const nowShielded = target.shieldUntil && performance.now() < target.shieldUntil;
+      if (!nowShielded) target.hp -= (enemy.damage || 24) * (1 - Math.min(0.7, target.damageReduction || 0)) * dt;
 
       if (target.hp <= 0) {
         target.hp = 0;
@@ -253,8 +257,18 @@ function updateHost(dt, now) {
           world.kills = (world.kills || 0) + 1;
           if (world.kills >= 1) unlockAchievement("first-kill", "Erster Gegner");
           if (world.kills >= 50) unlockAchievement("hunter-50", "Jäger: 50 Gegner");
-          if (enemy.type === "boss") { world.bossDefeated = (world.bossDefeated || 0) + 1; unlockAchievement("first-boss", "Eisriese besiegt"); dropSnow(enemy.x, enemy.y, 25); }
-          dropSnow(enemy.x, enemy.y, 3 + Math.floor(Math.random() * 4));
+          const killer = world.players.find(p => p.id === shot.owner);
+          const tier = enemy.type === "boss" ? 8 : enemy.type === "phantom" || enemy.type === "crystal" || enemy.type === "elite" ? 4 : enemy.type === "armored" || enemy.type === "heavy" || enemy.type === "ice" ? 2 : 1;
+          if (killer) {
+            killer.kills = (killer.kills || 0) + 1;
+            killer.coins = (killer.coins || 0) + tier * 2;
+            killer.hp = Math.min(killer.maxHp || 100, killer.hp + (killer.killHeal || 0));
+            if (killer.kills % 10 === 0) { killer.coins += 10; if (killer.id === localId) notify("Belohnungspfad: +10 Münzen!", 2200); }
+          }
+          if (enemy.type === "boss") { world.bossDefeated = (world.bossDefeated || 0) + 1; unlockAchievement("first-boss", "Eisriese besiegt"); dropSnow(enemy.x, enemy.y, 30 + Math.floor(world.level / 2)); }
+          const bonus = killer ? (killer.dropBonus || 0) : 0;
+          const lucky = killer && Math.random() < (killer.luckyDrops || 0);
+          dropSnow(enemy.x, enemy.y, Math.max(2, Math.round((3 + Math.floor(Math.random() * 4) + tier * 2 + bonus) * (lucky ? 2 : 1))));
         }
 
         break;
