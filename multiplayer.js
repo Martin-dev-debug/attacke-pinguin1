@@ -429,6 +429,7 @@ function makeSnapshot() {
     players: world.players.map(p => ({
       id: p.id,
       name: p.name,
+      skin: p.skin || "classic",
       x: p.x,
       y: p.y,
       r: p.r,
