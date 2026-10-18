@@ -18,12 +18,13 @@ function spawnEnemy() {
   else if (world.level >= 4 && roll < 0.74) type = "ice";
   else if (world.level >= 3 && roll < 0.86) type = "heavy";
   const scale=1+(world.level-1)*0.16;
-  const baseHp=({boss:210,elite:150,armored:115,ice:75,heavy:85,normal:35,crystal:125,phantom:105})[type];
-  const baseDamage=({boss:62,elite:48,armored:42,ice:32,heavy:38,normal:24,crystal:45,phantom:39})[type];
-  const baseSpeed=({boss:38,elite:58,armored:31,ice:55,heavy:34,normal:45,crystal:48,phantom:78})[type];
-  const baseRadius=({boss:31,elite:25,armored:24,ice:19,heavy:23,normal:16,crystal:23,phantom:20})[type];
-  const hp=Math.round(baseHp*scale);
-  world.enemies.push({id:"enemy-"+enemyId++,type,x,y,r:baseRadius+Math.min(world.level,12),hp,maxHp:hp,damage:Math.round(baseDamage*(1+(world.level-1)*0.08)),speed:baseSpeed+Math.min(world.level*2.5,65),abilityTimer:3+Math.random()*3,warning:0});
+  const baseHp=({boss:260,elite:150,armored:115,ice:75,heavy:85,normal:35,crystal:125,phantom:105})[type];
+  const baseDamage=({boss:68,elite:48,armored:42,ice:32,heavy:38,normal:24,crystal:45,phantom:39})[type];
+  const baseSpeed=({boss:42,elite:58,armored:31,ice:55,heavy:34,normal:45,crystal:48,phantom:78})[type];
+  const baseRadius=({boss:38,elite:25,armored:24,ice:19,heavy:23,normal:16,crystal:23,phantom:20})[type];
+  const bossScale = type === "boss" ? 1 + Math.max(0, world.level - 8) * 0.12 : 1;
+  const hp=Math.round(baseHp*scale*bossScale);
+  world.enemies.push({id:"enemy-"+enemyId++,type,x,y,r:baseRadius+Math.min(world.level,12),hp,maxHp:hp,damage:Math.round(baseDamage*(1+(world.level-1)*(type === "boss" ? 0.13 : 0.08))),speed:baseSpeed+Math.min(world.level*(type === "boss" ? 3.2 : 2.5),type === "boss" ? 105 : 65),abilityTimer:3+Math.random()*3,warning:0});
   if (world.enemies.length > 180) {
     const farthest = world.enemies.reduce((best, enemy) => { const d = Math.min(...alive.map(player => Math.hypot(player.x - enemy.x, player.y - enemy.y)), Infinity); return !best || d > best.distance ? {enemy,distance:d} : best; }, null);
     if (farthest) world.enemies = world.enemies.filter(enemy => enemy !== farthest.enemy);
@@ -57,7 +58,18 @@ function updateHost(dt, now) {
   }
 
   for (const player of world.players) {
-    if (!player.alive) continue;
+    if (!player.alive) {
+      if (player.respawnAt && now >= player.respawnAt) {
+        player.alive = true;
+        player.hp = player.maxHp || 100;
+        player.x += random(-120, 120);
+        player.y += random(-120, 120);
+        player.respawnAt = 0;
+        if (player.id === localId) notify("Du bist wieder im Spiel!", 2500);
+      } else {
+        continue;
+      }
+    }
 
     if (player.pendingUpgradeChoices && player.pendingUpgradeChoices.length) {
       player.input = { dx: 0, dy: 0, aimX: Math.cos(player.angle || 0), aimY: Math.sin(player.angle || 0), shoot: false, wall: false, house: false };
@@ -104,8 +116,10 @@ function updateHost(dt, now) {
         player.totalSnowCollected = (player.totalSnowCollected || 0) + drop.amount;
         if (player.totalSnowCollected >= 100) unlockAchievement("snow-100", "100 Schneebälle gesammelt");
         drop.amount = 0;
-        while (player.totalSnowCollected >= (player.nextUpgradeAt || 50)) {
-          player.nextUpgradeAt = (player.nextUpgradeAt || 50) + 50;
+        while (player.totalSnowCollected >= (player.nextUpgradeAt || 25)) {
+          player.level = (player.level || 1) + 1;
+          player.nextUpgradeAt = (player.nextUpgradeAt || 25) + 25 + ((player.level - 1) * 15);
+          if (player.id === localId) notify("Level " + player.level + " erreicht! Wähle dein Upgrade.", 3200);
           if (!player.pendingUpgradeChoices || !player.pendingUpgradeChoices.length) {
             player.pendingUpgradeChoices = makeUpgradeChoices();
             if (player.id === localId) notify("Wähle dein Upgrade!", 3200);
@@ -129,9 +143,9 @@ function updateHost(dt, now) {
       if (target) {
         world.bossSpawnedAtLevel = world.level;
         const angle = Math.random() * Math.PI * 2, x = target.x + Math.cos(angle) * 620, y = target.y + Math.sin(angle) * 620;
-        const hp = 350 + world.level * 45;
-        world.enemies.push({id:"boss-"+enemyId++,type:"boss",x,y,r:38,hp,maxHp:hp,damage:58+world.level*2,speed:42+world.level,abilityTimer:2.5,warning:0});
-        notify("BOSS-ALARM! Ein Eisriese ist unterwegs!", 4500);
+        const hp = Math.round((420 + world.level * 65) * (1 + Math.max(0, world.level - 5) * 0.08));
+        world.enemies.push({id:"boss-"+enemyId++,type:"boss",x,y,r:43+Math.min(8, Math.floor(world.level/3)),hp,maxHp:hp,damage:65+world.level*3,speed:45+world.level*1.8,abilityTimer:2.2,warning:0});
+        notify("Ein gewaltiger Eisriese nähert sich!", 4500);
       }
     }
     const count = Math.min(1 + Math.floor(world.level / 3), 4);
@@ -181,7 +195,7 @@ function updateHost(dt, now) {
       for (const player of world.players) {
         if (player.alive && Math.hypot(player.x - enemy.x, player.y - enemy.y) < 155) {
           player.hp -= 24 * (1 - Math.min(0.7, player.damageReduction || 0));
-          if (player.hp <= 0) { player.hp = 0; player.alive = false; dropSnow(player.x, player.y, 8); }
+          if (player.hp <= 0) { player.hp = 0; player.alive = false; player.respawnAt = now + 6000; dropSnow(player.x, player.y, 8); }
         }
       }
     }
@@ -194,6 +208,7 @@ function updateHost(dt, now) {
       if (target.hp <= 0) {
         target.hp = 0;
         target.alive = false;
+        target.respawnAt = now + 6000;
         dropSnow(target.x, target.y, 8);
       }
     }
@@ -257,12 +272,6 @@ function updateHost(dt, now) {
   // Levelaufstieg läuft zeitbasiert oben in updateHost, nicht nur wenn
   // zufällig gerade keine Gegner auf der Karte sind.
 
-  if (
-    world.players.length > 0 &&
-    world.players.every(player => !player.alive)
-  ) {
-    gameOver = true;
-    notify("Game Over!", 100000);
-  }
+  // Spieler werden nach sechs Sekunden automatisch wiederbelebt; kein endgültiges Game Over.
 }
 
