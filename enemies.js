@@ -121,6 +121,10 @@ function updateHost(dt, now) {
         while (player.totalSnowCollected >= (player.nextUpgradeAt || 25)) {
           player.level = (player.level || 1) + 1;
           player.nextUpgradeAt = (player.nextUpgradeAt || 25) + 25 + ((player.level - 1) * 15);
+          if (player.level % 50 === 0) {
+            player.pendingWheel = true;
+            if (player.id === localId) notify("Glücksrad freigeschaltet!", 3500);
+          }
           if (player.id === localId) notify("Level " + player.level + " erreicht! Wähle dein Upgrade.", 3200);
           if (!player.pendingUpgradeChoices || !player.pendingUpgradeChoices.length) {
             player.pendingUpgradeChoices = makeUpgradeChoices();
