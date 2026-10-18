@@ -173,7 +173,7 @@ function gameLoop(now) {
 
   lastFrame = now;
 
-  if (paused) { updateCamera(); drawWorld(); drawMinimap(); updateUI(now); requestAnimationFrame(gameLoop); return; }
+  if (paused) { updateCamera(); drawWorld(); drawMinimap(); updateUI(now); if (typeof render3DWorld === "function") render3DWorld(); requestAnimationFrame(gameLoop); return; }
 
   if (isHost) {
     updateHost(dt, now);
@@ -190,6 +190,7 @@ function gameLoop(now) {
   drawWorld();
   drawMinimap();
   updateUI(now);
+  if (typeof render3DWorld === "function") render3DWorld();
 
   requestAnimationFrame(gameLoop);
 }
