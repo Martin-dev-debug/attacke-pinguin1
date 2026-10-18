@@ -75,15 +75,17 @@ function startGame() {
 function updateUI(now) {
   const player = localPlayer();
 
-  levelStat.textContent = world.level;
+  levelStat.textContent = player ? (player.level || 1) : 1;
   snowStat.textContent = player ? player.snow : 0;
   playersStat.textContent = world.players.length + "/" + MAX_PLAYERS;
   enemiesStat.textContent = world.enemies.length;
   weaponStat.textContent = "Stufe " + (player ? (player.weaponLevel || 1) : 1);
-  const collected = player ? (player.totalSnowCollected || 0) : 0, nextAt = player ? (player.nextUpgradeAt || 50) : 50;
-  const progress = Math.max(0, Math.min(100, (collected - (nextAt - 50)) / 50 * 100));
+  const collected = player ? (player.totalSnowCollected || 0) : 0, nextAt = player ? (player.nextUpgradeAt || 25) : 25;
+  const level = player ? (player.level || 1) : 1;
+  const needed = 25 + Math.max(0, level - 1) * 15;
+  const progress = Math.max(0, Math.min(100, (collected - (nextAt - needed)) / needed * 100));
   if (upgradeProgress) upgradeProgress.style.width = progress + "%";
-  if (upgradeProgressText) upgradeProgressText.textContent = Math.max(0, nextAt - collected) + " Schneebälle bis Upgrade";
+  if (upgradeProgressText) upgradeProgressText.textContent = Math.max(0, nextAt - collected) + " Schneebälle bis Level " + (level + 1);
   const boss = world.enemies.find(enemy => enemy.type === "boss");
   if (bossBar) bossBar.classList.toggle("hidden", !boss);
   if (bossBarFill) bossBarFill.style.width = boss ? Math.max(0, Math.min(100, boss.hp / boss.maxHp * 100)) + "%" : "0%";
