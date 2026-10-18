@@ -74,6 +74,16 @@
           <button id="houseBtn" class="secondary side-button">Schneehaus / Iglu (15)</button>
           <p class="muted">Wand (E): 5 Schneebälle<br>Schneehaus (H): 15 Schneebälle<br>Alle 50 eingesammelten Schneebälle: Waffen-Upgrade.</p>
         </div>
+        <div class="side-card progression-card">
+          <p class="eyebrow">DEIN FORTSCHRITT</p>
+          <p class="progression-line">Besiegt: <strong id="killStat">0</strong> · Münzen: <strong id="coinStat">0</strong></p>
+          <p id="rewardPathText" class="muted">10 Kills bis zur ersten Pfad-Belohnung</p>
+          <div class="reward-track"><span id="rewardTrackFill"></span></div>
+          <p class="eyebrow shop-heading">SCHNEESHOP</p>
+          <button id="shopHealBtn" class="secondary side-button">Heilung · 12 Münzen</button>
+          <button id="shopPowerBtn" class="secondary side-button">Schaden +10 · 20 Münzen</button>
+          <button id="shopSpeedBtn" class="secondary side-button">Tempo +12 · 20 Münzen</button>
+        </div>
         <div class="side-card">
           <p class="eyebrow">GRUPPE</p>
           <p id="roomLabel" class="muted">Solo-Spiel</p>
@@ -85,6 +95,15 @@
     </div>
   </main>
 
+    <div id="wheelOverlay" class="upgrade-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="wheelTitle">
+      <div class="upgrade-card wheel-card">
+        <p class="eyebrow">LEVEL-MEILENSTEIN</p>
+        <h2 id="wheelTitle">Glücksrad</h2>
+        <div class="wheel-visual" aria-hidden="true">❄ ★ ❄</div>
+        <p id="wheelResult" class="upgrade-subtitle">Dreh das Rad für eine zufällige Belohnung – oder ein Risiko.</p>
+        <button id="spinWheelBtn" class="primary">Glücksrad drehen</button>
+      </div>
+    </div>
     <div id="gameOverStats" class="game-over-stats hidden"></div>
     <div id="upgradeOverlay" class="upgrade-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="upgradeTitle">
       <div class="upgrade-card">
