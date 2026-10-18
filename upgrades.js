@@ -50,7 +50,7 @@ function renderUpgradeChoices(player) {
   const choicesBox = document.getElementById("upgradeChoices");
   if (!overlay || !choicesBox) return;
   const choices = player && player.pendingUpgradeChoices;
-  if (!choices || !choices.length || !running) {
+  if (!choices || !choices.length || !running || (player && player.pendingWheel)) {
     overlay.classList.add("hidden");
     choicesBox.replaceChildren();
     return;
@@ -93,6 +93,7 @@ function applyShopItem(player, item) {
   if (item === "heal") player.hp = Math.min(player.maxHp || 100, player.hp + Math.ceil((player.maxHp || 100) * 0.45));
   if (item === "power") player.damageBonus = (player.damageBonus || 0) + 10;
   if (item === "speed") player.speed = Math.min(390, (player.speed || 220) + 12);
+  saveMetaProgress(player);
   if (player.id === localId) notify(item === "heal" ? "Heilung gekauft!" : item === "power" ? "Schaden verbessert!" : "Tempo verbessert!", 2000);
   return true;
 }
@@ -105,6 +106,8 @@ function spinReward() {
 function applyWheelReward(player) {
   if (!player || !player.pendingWheel) return false;
   player.pendingWheel = false;
+  const button = document.getElementById("spinWheelBtn");
+  if (button) button.disabled = true;
   const roll = Math.random(); let result = "";
   if (roll < 0.025) {
     player.machineGun = true; player.fireRateMultiplier = Math.max(0.22, (player.fireRateMultiplier || 1) * 0.45);
@@ -120,6 +123,8 @@ function applyWheelReward(player) {
   const node = document.getElementById("wheelResult");
   if (node && player.id === localId) node.textContent = result;
   if (player.id === localId) notify(result, 4000);
+  saveMetaProgress(player);
+  if (button) { button.disabled = false; button.textContent = "Glücksrad gedreht"; }
   return true;
 }
 for (const [id, item] of [["shopHealBtn","heal"],["shopPowerBtn","power"],["shopSpeedBtn","speed"]]) {
