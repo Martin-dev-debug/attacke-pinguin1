@@ -80,6 +80,15 @@ function updateUI(now) {
   playersStat.textContent = world.players.length + "/" + MAX_PLAYERS;
   enemiesStat.textContent = world.enemies.length;
   weaponStat.textContent = "Stufe " + (player ? (player.weaponLevel || 1) : 1);
+  const collected = player ? (player.totalSnowCollected || 0) : 0, nextAt = player ? (player.nextUpgradeAt || 50) : 50;
+  const progress = Math.max(0, Math.min(100, (collected - (nextAt - 50)) / 50 * 100));
+  if (upgradeProgress) upgradeProgress.style.width = progress + "%";
+  if (upgradeProgressText) upgradeProgressText.textContent = Math.max(0, nextAt - collected) + " Schneebälle bis Upgrade";
+  const boss = world.enemies.find(enemy => enemy.type === "boss");
+  if (bossBar) bossBar.classList.toggle("hidden", !boss);
+  if (bossBarFill) bossBarFill.style.width = boss ? Math.max(0, Math.min(100, boss.hp / boss.maxHp * 100)) + "%" : "0%";
+  if (bossBarLabel) bossBarLabel.textContent = boss ? "EISRIESE · " + Math.ceil(boss.hp) + " / " + boss.maxHp : "";
+  if (gameOverStats && gameOver) gameOverStats.textContent = "Level " + world.level + " · " + (world.kills || 0) + " Gegner besiegt · " + (world.bossDefeated || 0) + " Bosse besiegt · " + Math.floor((performance.now() - gameStartedAt) / 1000) + " Sekunden überlebt";
   renderUpgradeChoices(player);
 
   playerList.replaceChildren();
