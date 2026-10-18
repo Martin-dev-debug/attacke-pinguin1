@@ -265,9 +265,16 @@ function drawWorld() {
       armored: "#687783", elite: "#d83c91", boss: "#7e45b8",
       crystal: "#39d9a7", phantom: "#5144a8"
     };
-    if (enemy.type === "boss" && enemy.warning > 0) {
-      ctx.strokeStyle = "#ff6464"; ctx.lineWidth = 4; ctx.globalAlpha = 0.35 + (enemy.warning / 0.9) * 0.45;
-      ctx.beginPath(); ctx.arc(x, y, 155, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+    if (enemy.type === "boss") {
+      const pulse = 1 + Math.sin(performance.now() / 180) * 0.07;
+      ctx.strokeStyle = "#c9a0ff"; ctx.lineWidth = 5; ctx.globalAlpha = 0.7;
+      ctx.beginPath(); ctx.arc(x, y, (enemy.r + 13) * pulse, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = "#7e45b8"; ctx.lineWidth = 3; ctx.globalAlpha = 0.5;
+      ctx.beginPath(); ctx.arc(x, y, (enemy.r + 22) * pulse, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+      if (enemy.warning > 0) {
+        ctx.strokeStyle = "#ff6464"; ctx.lineWidth = 4; ctx.globalAlpha = 0.35 + (enemy.warning / 0.9) * 0.45;
+        ctx.beginPath(); ctx.arc(x, y, 155, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+      }
     }
     ctx.fillStyle = enemyColors[enemy.type] || enemyColors.normal;
     ctx.beginPath();
@@ -331,9 +338,13 @@ function drawWorld() {
 
     ctx.fillStyle = "#fff";
     ctx.beginPath();
-    ctx.arc(x - 5, y - 4, 3, 0, Math.PI * 2);
-    ctx.arc(x + 5, y - 4, 3, 0, Math.PI * 2);
+    ctx.arc(x - (enemy.type === "boss" ? 9 : 5), y - 4, enemy.type === "boss" ? 5 : 3, 0, Math.PI * 2);
+    ctx.arc(x + (enemy.type === "boss" ? 9 : 5), y - 4, enemy.type === "boss" ? 5 : 3, 0, Math.PI * 2);
     ctx.fill();
+    if (enemy.type === "boss") {
+      ctx.fillStyle = "#4b1e78";
+      ctx.beginPath(); ctx.arc(x - 9, y - 4, 2, 0, Math.PI * 2); ctx.arc(x + 9, y - 4, 2, 0, Math.PI * 2); ctx.fill();
+    }
 
     ctx.fillStyle = "#542020";
     ctx.fillRect(x - 18, y - enemy.r - 10, 36, 4);
