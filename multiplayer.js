@@ -264,6 +264,7 @@ function handlePlayerJoin(conn, data) {
   );
 
   conn.playerId = id;
+  player.coins = Math.max(0, Math.floor(Number(data.coins) || 0));
   world.players.push(player);
 
   // Erst ID senden, dann den aktuellen Spielstand übertragen.
@@ -347,7 +348,8 @@ async function joinOnlineRoom() {
           joiningSent = true;
           hostConnection.send({
             type: "join",
-            name: getName()
+            name: getName(),
+            coins: Math.max(0, Number(loadMetaProgress().coins) || 0)
           });
         }
         return;
@@ -512,6 +514,17 @@ function applySnapshot(data) {
   if (runOverOverlay) runOverOverlay.classList.toggle("hidden", !gameOver);
 
   world.players = data.players || [];
+  const syncedLocal = world.players.find(p => p.id === localId);
+  if (syncedLocal) {
+    const kills = Math.max(0, syncedLocal.kills || 0);
+    if (!hasSyncedLocalKills) { lastLocalSyncedKills = kills; hasSyncedLocalKills = true; }
+    else {
+      const gained = Math.max(0, kills - lastLocalSyncedKills);
+      if (gained) saveMetaProgress(syncedLocal, gained);
+      else saveMetaProgress(syncedLocal);
+      lastLocalSyncedKills = kills;
+    }
+  }
   world.enemies = data.enemies || [];
   world.snowballs = data.snowballs || [];
   world.walls = data.walls || [];
