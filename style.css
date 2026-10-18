@@ -154,3 +154,6 @@ input:focus{border-color:var(--cyan)}
   .rotate-prompt { display: none !important; }
 }
 
+
+/* Neue Spielanzeigen */
+.progress-panel{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:min(320px,48%);z-index:12;padding:7px 10px;border:1px solid #477080;border-radius:10px;background:#07131dcc;color:#eff8fc;font-size:11px;text-align:center;pointer-events:none}.progress-track,.boss-bar-track{height:7px;overflow:hidden;background:#243b47;border-radius:99px;margin-top:5px}.progress-track span{display:block;height:100%;width:0;background:linear-gradient(90deg,#66e0e8,#9ae66e);transition:width .15s}.boss-bar{position:absolute;top:54px;left:50%;transform:translateX(-50%);width:min(420px,65%);z-index:13;padding:8px 12px;border:1px solid #a75bcb;border-radius:10px;background:#170d25e8;color:#f3dcff;text-align:center;font-size:12px;pointer-events:none}.boss-bar.hidden{display:none}.boss-bar-track{height:10px;background:#48223f}.boss-bar-track span{display:block;height:100%;width:100%;background:linear-gradient(90deg,#d83c91,#9b64ed);transition:width .12s}.game-over-stats{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:11000;max-width:90vw;padding:10px 16px;background:#07131def;border:1px solid #477080;border-radius:12px;color:#eff8fc;font-weight:700;text-align:center}.game-over-stats.hidden{display:none}
