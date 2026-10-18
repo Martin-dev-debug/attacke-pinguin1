@@ -21,6 +21,13 @@
   ground.rotation.x=-Math.PI/2; ground.position.y=-2; ground.receiveShadow=true; scene.add(ground);
   const grid = new THREE.GridHelper(6000, 75, "#aacbd5", "#c3dce3"); grid.position.y=-1.5; scene.add(grid);
   const entityMeshes = new Map();
+  const renderIds = new WeakMap();
+  let nextRenderId = 1;
+  function renderId(item) {
+    if (item.id !== undefined && item.id !== null) return String(item.id);
+    if (!renderIds.has(item)) renderIds.set(item, nextRenderId++);
+    return String(renderIds.get(item));
+  }
   const mat = (color, roughness=0.8) => new THREE.MeshStandardMaterial({color,roughness});
   const mats = {
     body: mat("#202b35"), belly: mat("#f5f7f5"), beak: mat("#f7a83e"), eye: mat("#101820"),
@@ -76,7 +83,7 @@
   function syncList(items, prefix, create, place) {
     const alive = new Set();
     for(const item of items||[]) {
-      const id=prefix+item.id; alive.add(id);
+      const id=prefix+renderId(item); alive.add(id);
       const mesh=getMesh(id,()=>create(item));
       place(mesh,item);
     }
