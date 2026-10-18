@@ -231,52 +231,86 @@ const joystick = document.getElementById("joystick");
 const stick = document.getElementById("stick");
 
 let joystickPointer = null;
+let joystickOrigin = null;
+let floatingJoystick = false;
 
 function setStick(event) {
   const rect = joystick.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
-  const max = rect.width * 0.34;
+  const cx = floatingJoystick && joystickOrigin ? joystickOrigin.x : rect.left + rect.width / 2;
+  const cy = floatingJoystick && joystickOrigin ? joystickOrigin.y : rect.top + rect.height / 2;
+  const max = (floatingJoystick ? 56 : rect.width * 0.34);
 
   let dx = event.clientX - cx;
   let dy = event.clientY - cy;
   const length = Math.hypot(dx, dy);
-
-  if (length > max) {
-    dx = dx / length * max;
-    dy = dy / length * max;
-  }
+  if (length > max) { dx = dx / length * max; dy = dy / length * max; }
 
   touch.x = dx / max;
   touch.y = dy / max;
 
-  stick.style.left = (rect.width / 2 - 24 + dx) + "px";
-  stick.style.top = (rect.height / 2 - 24 + dy) + "px";
+  if (floatingJoystick) {
+    joystick.style.position = "fixed";
+    joystick.style.left = cx + "px";
+    joystick.style.top = cy + "px";
+    joystick.style.transform = "translate(-50%, -50%)";
+    joystick.style.zIndex = "20003";
+    stick.style.left = "calc(50% - 24px + " + dx + "px)";
+    stick.style.top = "calc(50% - 24px + " + dy + "px)";
+  } else {
+    stick.style.left = (rect.width / 2 - 24 + dx) + "px";
+    stick.style.top = (rect.height / 2 - 24 + dy) + "px";
+  }
 }
 
 function releaseJoystick() {
   joystickPointer = null;
+  joystickOrigin = null;
+  floatingJoystick = false;
   touch.x = 0;
   touch.y = 0;
+  joystick.style.position = "";
+  joystick.style.left = "";
+  joystick.style.top = "";
+  joystick.style.transform = "";
+  joystick.style.zIndex = "";
   stick.style.left = "calc(50% - 24px)";
   stick.style.top = "calc(50% - 24px)";
 }
 
 joystick.addEventListener("pointerdown", event => {
+  event.preventDefault();
   joystickPointer = event.pointerId;
+  joystickOrigin = null;
+  floatingJoystick = false;
   joystick.setPointerCapture(event.pointerId);
   setStick(event);
 });
 
 joystick.addEventListener("pointermove", event => {
-  if (event.pointerId === joystickPointer) {
-    setStick(event);
-  }
+  if (event.pointerId === joystickPointer) setStick(event);
 });
-
 joystick.addEventListener("pointerup", releaseJoystick);
 joystick.addEventListener("pointercancel", releaseJoystick);
 joystick.addEventListener("lostpointercapture", releaseJoystick);
+
+// Survival.io-ähnliche Steuerung: Auf der linken Spielfeldhälfte ziehen,
+// der virtuelle Stick erscheint dort, wo der Finger aufgesetzt wurde.
+canvas.addEventListener("pointerdown", event => {
+  if (event.pointerType === "mouse" || event.clientX > window.innerWidth * 0.55) return;
+  if (!running || paused || gameOver) return;
+  const upgradeOverlay = document.getElementById("upgradeOverlay");
+  if (upgradeOverlay && !upgradeOverlay.classList.contains("hidden")) return;
+  event.preventDefault();
+  if (joystickPointer !== null) return;
+  joystickPointer = event.pointerId;
+  joystickOrigin = { x: event.clientX, y: event.clientY };
+  floatingJoystick = true;
+  joystick.setPointerCapture(event.pointerId);
+  setStick(event);
+});
+joystick.addEventListener("pointermove", event => {
+  if (event.pointerId === joystickPointer) setStick(event);
+});
 
 const shootBtn = document.getElementById("shootBtn");
 
