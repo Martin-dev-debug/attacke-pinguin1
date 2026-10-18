@@ -133,7 +133,7 @@ function getInput(player) {
     aimX,
     aimY,
     shoot: mouse.down || touch.shooting || !!keys[" "],
-    wall: !!keys.e,
+    wall: !!keys.q,
     house: !!keys.h,
     revive: !!keys.r
   };
