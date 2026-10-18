@@ -80,6 +80,15 @@ function updateUI(now) {
   playersStat.textContent = world.players.length + "/" + MAX_PLAYERS;
   enemiesStat.textContent = world.enemies.length;
   weaponStat.textContent = "Stufe " + (player ? (player.weaponLevel || 1) : 1);
+  const killStat = document.getElementById("killStat"), coinStat = document.getElementById("coinStat");
+  if (killStat) killStat.textContent = player ? (player.kills || 0) : 0;
+  if (coinStat) coinStat.textContent = player ? (player.coins || 0) : 0;
+  const pathText = document.getElementById("rewardPathText"), pathFill = document.getElementById("rewardTrackFill");
+  const kills = player ? (player.kills || 0) : 0, pathStep = 10, pathProgress = kills % pathStep;
+  if (pathText) pathText.textContent = kills >= 10 ? ((10 - pathProgress) || 10) + " Kills bis zur nächsten Pfad-Belohnung · Meilensteine geben Münzen" : (10 - kills) + " Kills bis zur ersten Pfad-Belohnung";
+  if (pathFill) pathFill.style.width = (pathProgress / pathStep * 100) + "%";
+  const wheelOverlay = document.getElementById("wheelOverlay");
+  if (wheelOverlay) wheelOverlay.classList.toggle("hidden", !(player && player.pendingWheel));
   const collected = player ? (player.totalSnowCollected || 0) : 0, nextAt = player ? (player.nextUpgradeAt || 25) : 25;
   const level = player ? (player.level || 1) : 1;
   const needed = 25 + Math.max(0, level - 1) * 15;
