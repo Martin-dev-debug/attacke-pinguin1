@@ -27,6 +27,12 @@ const snowStat = document.getElementById("snowStat");
 const playersStat = document.getElementById("playersStat");
 const enemiesStat = document.getElementById("enemiesStat");
 const weaponStat = document.getElementById("weaponStat");
+const upgradeProgress = document.getElementById("upgradeProgress");
+const upgradeProgressText = document.getElementById("upgradeProgressText");
+const bossBar = document.getElementById("bossBar");
+const bossBarFill = document.getElementById("bossBarFill");
+const bossBarLabel = document.getElementById("bossBarLabel");
+const gameOverStats = document.getElementById("gameOverStats");
 const pauseOverlay = document.getElementById("pauseOverlay");
 const pauseBtn = document.getElementById("pauseBtn");
 const restartBtn = document.getElementById("restartBtn");
@@ -54,6 +60,14 @@ let enemyId = 1;
 let lastSpawn = 0;
 let gameStartedAt = 0;
 let nextTimedLevelAt = 0;
+const achievementSet = new Set();
+try { for (const id of JSON.parse(localStorage.getItem("attackePinguinAchievements") || "[]")) achievementSet.add(id); } catch (_) {}
+function unlockAchievement(id, title) {
+  if (achievementSet.has(id)) return;
+  achievementSet.add(id);
+  try { const saved = JSON.parse(localStorage.getItem("attackePinguinAchievements") || "[]"); if (!saved.includes(id)) localStorage.setItem("attackePinguinAchievements", JSON.stringify([...saved, id])); } catch (_) {}
+  notify("ERFOLG FREIGESCHALTET: " + title, 3500);
+}
 
 const keys = {};
 const mouse = { x: VIEW_W / 2 + 100, y: VIEW_H / 2, down: false, active: false };
@@ -62,6 +76,7 @@ const touch = { x: 0, y: 0, shooting: false };
 const world = {
   width: 1800,
   height: 1400,
+  minX: 0, minY: 0, kills: 0, bossDefeated: 0, bossSpawnedAtLevel: 0,
   level: 1,
   players: [],
   enemies: [],
@@ -115,7 +130,9 @@ const UPGRADE_POOL = [
   { id: "speed", title: "Pinguin-Sprint", description: "+25 Bewegungsgeschwindigkeit.", icon: "➤", apply: p => { p.speed = Math.min(360, (p.speed || 220) + 25); } },
   { id: "vitality", title: "Eisiges Herz", description: "+25 maximale Lebenspunkte und heilt 25.", icon: "♥", apply: p => { p.maxHp = (p.maxHp || 100) + 25; p.hp = Math.min(p.maxHp, p.hp + 25); } },
   { id: "armor", title: "Schneepanzer", description: "Du erleidest 12 % weniger Kontaktschaden.", icon: "⬡", apply: p => { p.damageReduction = Math.min(0.6, (p.damageReduction || 0) + 0.12); } },
-  { id: "magnet", title: "Schneemagnet", description: "Sammle Schneebälle aus größerer Entfernung ein.", icon: "◎", apply: p => { p.pickupRadius = Math.min(100, (p.pickupRadius || 0) + 22); } }
+  { id: "magnet", title: "Schneemagnet", description: "Sammle Schneebälle aus größerer Entfernung ein.", icon: "◎", apply: p => { p.pickupRadius = Math.min(100, (p.pickupRadius || 0) + 22); } },
+  { id: "piercing", title: "Durchschlagskraft", description: "Schneebälle durchdringen einen zusätzlichen Gegner.", icon: "➶", apply: p => { p.piercing = Math.min(5, (p.piercing || 0) + 1); } },
+  { id: "blast", title: "Schneeball-Bombe", description: "Treffer verursachen kleinen Flächenschaden.", icon: "✹", apply: p => { p.blastRadius = Math.min(100, (p.blastRadius || 0) + 24); } }
 ];
 
 
