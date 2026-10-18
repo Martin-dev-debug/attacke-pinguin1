@@ -157,3 +157,13 @@ input:focus{border-color:var(--cyan)}
 
 /* Neue Spielanzeigen */
 .progress-panel{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:min(320px,48%);z-index:12;padding:7px 10px;border:1px solid #477080;border-radius:10px;background:#07131dcc;color:#eff8fc;font-size:11px;text-align:center;pointer-events:none}.progress-track,.boss-bar-track{height:7px;overflow:hidden;background:#243b47;border-radius:99px;margin-top:5px}.progress-track span{display:block;height:100%;width:0;background:linear-gradient(90deg,#66e0e8,#9ae66e);transition:width .15s}.boss-bar{position:absolute;top:54px;left:50%;transform:translateX(-50%);width:min(420px,65%);z-index:13;padding:8px 12px;border:1px solid #a75bcb;border-radius:10px;background:#170d25e8;color:#f3dcff;text-align:center;font-size:12px;pointer-events:none}.boss-bar.hidden{display:none}.boss-bar-track{height:10px;background:#48223f}.boss-bar-track span{display:block;height:100%;width:100%;background:linear-gradient(90deg,#d83c91,#9b64ed);transition:width .12s}.game-over-stats{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:11000;max-width:90vw;padding:10px 16px;background:#07131def;border:1px solid #477080;border-radius:12px;color:#eff8fc;font-weight:700;text-align:center}.game-over-stats.hidden{display:none}
+
+/* Fortschritt, Shop und Glücksrad */
+.progression-line{font-size:12px;color:#d8eaf0;margin:4px 0 8px}
+.reward-track{height:8px;background:#07141d;border:1px solid #294b5a;border-radius:99px;overflow:hidden;margin:8px 0 12px}
+.reward-track span{display:block;width:0;height:100%;background:linear-gradient(90deg,#5bd9ba,#e9d46a);transition:width .2s}
+.shop-heading{margin-top:14px}
+.wheel-card{text-align:center;max-width:460px}
+.wheel-visual{width:150px;height:150px;margin:18px auto;border-radius:50%;display:grid;place-items:center;background:conic-gradient(#f1d36a 0 45deg,#4dc8bd 45deg 90deg,#d76a75 90deg 135deg,#7f79e8 135deg 180deg,#f1d36a 180deg 225deg,#4dc8bd 225deg 270deg,#d76a75 270deg 315deg,#7f79e8 315deg);border:8px solid #d9edf5;color:#10202a;font-size:27px;font-weight:900;box-shadow:0 0 0 5px #274b5b,0 10px 35px #0008}
+#spinWheelBtn{width:100%}
+@media(max-width:900px){.progression-card{grid-column:1/-1}}
