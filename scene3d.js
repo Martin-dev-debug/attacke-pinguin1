@@ -83,7 +83,7 @@
     for(const [id,mesh] of entityMeshes) if(id.startsWith(prefix)&&!alive.has(id)){scene.remove(mesh);entityMeshes.delete(id);}
   }
   window.render3DWorld = function() {
-    if(!window.world || !window.camera || !window.localPlayer) return;
+    if(typeof world === "undefined" || typeof localPlayer !== "function") return;
     const players=world.players||[], enemies=world.enemies||[];
     syncList(players,"p:",p=>makePenguin(p.skin,!p.alive),(m,p)=>{
       m.position.set(p.x,0,p.y); m.rotation.y=-(p.angle||0); m.visible=true;
