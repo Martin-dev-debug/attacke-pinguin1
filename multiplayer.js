@@ -192,6 +192,16 @@ function handleIncomingConnection(conn) {
       return;
     }
 
+    if (data.type === "shop" && conn.playerId) {
+      const player = world.players.find(p => p.id === conn.playerId);
+      if (player) applyShopItem(player, String(data.item || ""));
+      return;
+    }
+    if (data.type === "wheel" && conn.playerId) {
+      const player = world.players.find(p => p.id === conn.playerId);
+      if (player) applyWheelReward(player);
+      return;
+    }
     if (data.type === "upgrade" && conn.playerId) {
       const player = world.players.find(p => p.id === conn.playerId);
       if (player) applyUpgradeChoice(player, String(data.upgradeId || ""));
