@@ -18,11 +18,11 @@ function spawnEnemy() {
   else if (world.level >= 4 && roll < 0.74) type = "ice";
   else if (world.level >= 3 && roll < 0.86) type = "heavy";
   const scale=1+(world.level-1)*0.16;
-  const baseHp=({boss:260,elite:150,armored:115,ice:75,heavy:85,normal:35,crystal:125,phantom:105})[type];
+  const baseHp=({boss:1400,elite:150,armored:115,ice:75,heavy:85,normal:35,crystal:125,phantom:105})[type];
   const baseDamage=({boss:68,elite:48,armored:42,ice:32,heavy:38,normal:24,crystal:45,phantom:39})[type];
   const baseSpeed=({boss:42,elite:58,armored:31,ice:55,heavy:34,normal:45,crystal:48,phantom:78})[type];
   const baseRadius=({boss:38,elite:25,armored:24,ice:19,heavy:23,normal:16,crystal:23,phantom:20})[type];
-  const bossScale = type === "boss" ? 1 + Math.max(0, world.level - 8) * 0.12 : 1;
+  const bossScale = type === "boss" ? 1 + Math.max(0, world.level - 8) * 0.18 : 1;
   const hp=Math.round(baseHp*scale*bossScale);
   world.enemies.push({id:"enemy-"+enemyId++,type,x,y,r:baseRadius+Math.min(world.level,12),hp,maxHp:hp,damage:Math.round(baseDamage*(1+(world.level-1)*(type === "boss" ? 0.13 : 0.08))),speed:baseSpeed+Math.min(world.level*(type === "boss" ? 3.2 : 2.5),type === "boss" ? 105 : 65),abilityTimer:3+Math.random()*3,warning:0});
   if (world.enemies.length > 180) {
@@ -164,7 +164,7 @@ function updateHost(dt, now) {
       if (target) {
         world.bossSpawnedAtLevel = world.level;
         const angle = Math.random() * Math.PI * 2, x = target.x + Math.cos(angle) * 620, y = target.y + Math.sin(angle) * 620;
-        const hp = Math.round((420 + world.level * 65) * (1 + Math.max(0, world.level - 5) * 0.08));
+        const hp = Math.round((1800 + world.level * 240) * (1 + Math.max(0, world.level - 5) * 0.12));
         world.enemies.push({id:"boss-"+enemyId++,type:"boss",x,y,r:43+Math.min(8, Math.floor(world.level/3)),hp,maxHp:hp,damage:65+world.level*3,speed:45+world.level*1.8,abilityTimer:2.2,warning:0});
         notify("Ein gewaltiger Eisriese nähert sich!", 4500);
       }
