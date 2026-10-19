@@ -175,6 +175,8 @@ function renderMetaPanel() {
   if(coinsNode) coinsNode.textContent=String(meta.coins||0);
   if(xpNode) xpNode.textContent=String(meta.passXP||0);
   const xp=Number(meta.passXP)||0, next=((Math.floor(xp/5)+1)*5);
+  const premiumBtn=document.getElementById("premiumPassBtn");
+  if(premiumBtn){premiumBtn.textContent=meta.premiumPass?"Premium-Pass aktiv · Zusatzbelohnungen freigeschaltet":"Premium-Pass freischalten · 250 Münzen";premiumBtn.disabled=!!meta.premiumPass||(meta.coins||0)<250;}
   const textNode=document.getElementById("metaPassText"), fill=document.getElementById("metaPassFill");
   if(textNode) textNode.textContent=(next-xp)+" Gegner bis zur nächsten Pass-Box · jede Box gibt Münzen.";
   if(fill) fill.style.width=((xp%5)/5*100)+"%";
@@ -192,7 +194,7 @@ function renderMetaPanel() {
       box.addEventListener("click",()=>{
         const latest=loadMetaProgress();latest.claimedBoxes=Array.isArray(latest.claimedBoxes)?latest.claimedBoxes:[];
         if((latest.passXP||0)<milestone||latest.claimedBoxes.includes(milestone))return;
-        latest.claimedBoxes.push(milestone);latest.coins=(latest.coins||0)+35+Math.floor(Math.random()*26);
+        latest.claimedBoxes.push(milestone);latest.coins=(latest.coins||0)+35+Math.floor(Math.random()*26)+(latest.premiumPass?50:0);
         try{localStorage.setItem("attackePinguinMeta",JSON.stringify(latest));}catch(_){}
         const p=localPlayer();if(p){p.coins=latest.coins;}
         notify("Pass-Box geöffnet: Münzen erhalten!",2500);renderMetaPanel();
@@ -228,3 +230,6 @@ function renderMetaPanel() {
 for(const id of ["openMetaMenuBtn","openMetaGameBtn"]){const btn=document.getElementById(id);if(btn)btn.addEventListener("click",openMetaPanel);}
 const closeMetaBtn=document.getElementById("closeMetaBtn");if(closeMetaBtn)closeMetaBtn.addEventListener("click",closeMetaPanel);
 const metaOverlay=document.getElementById("metaOverlay");if(metaOverlay)metaOverlay.addEventListener("click",event=>{if(event.target===metaOverlay)closeMetaPanel();});
+
+const premiumPassBtn=document.getElementById("premiumPassBtn");
+if(premiumPassBtn)premiumPassBtn.addEventListener("click",()=>{const meta=loadMetaProgress();if(meta.premiumPass||(meta.coins||0)<250)return;meta.coins-=250;meta.premiumPass=true;try{localStorage.setItem("attackePinguinMeta",JSON.stringify(meta));}catch(_){}const p=localPlayer();if(p)p.coins=meta.coins;notify("Premium-Pass freigeschaltet! Jede Box gibt 50 Münzen extra.",3000);renderMetaPanel();});
