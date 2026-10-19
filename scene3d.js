@@ -67,19 +67,23 @@
   }
   function makeEnemy(type="normal", radius=16) {
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.SphereGeometry(radius,18,14), mats[type] || mats.normal);
-    body.position.y=radius+2; body.castShadow=true; g.add(body);
-    const eyeMat = mat("#fff8ed");
-    for (const side of [-1,1]) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(Math.max(2,radius*0.13),8,6), eyeMat);
-      eye.position.set(side*radius*0.28,radius*1.12,radius*0.78); g.add(eye);
+    const colors={normal:"#c74343",heavy:"#e27b32",ice:"#39b9d5",armored:"#687783",elite:"#d83c91",boss:"#7e45b8",crystal:"#39d9a7",phantom:"#5144a8"};
+    const color=colors[type]||colors.normal, bodyMat=mat(color,0.48), bellyMat=mat("#f4f8fa");
+    const body=new THREE.Mesh(new THREE.SphereGeometry(radius,18,14),bodyMat); body.scale.set(.82,1.1,.72); body.position.y=radius+2; body.castShadow=true; g.add(body);
+    const belly=new THREE.Mesh(new THREE.SphereGeometry(radius*.62,14,10),bellyMat); belly.scale.set(.8,1,.38); belly.position.set(0,radius+1,radius*.62); g.add(belly);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(radius*.52,14,10),bodyMat); head.position.set(0,radius*1.9,2); g.add(head);
+    for(const side of [-1,1]) {
+      const eye=new THREE.Mesh(new THREE.SphereGeometry(Math.max(1.7,radius*.12),8,6),mat("#ffffff")); eye.position.set(side*radius*.23,radius*1.95,radius*.45); g.add(eye);
+      const pupil=new THREE.Mesh(new THREE.SphereGeometry(Math.max(.8,radius*.06),8,6),mat("#17212b")); pupil.position.set(side*radius*.23,radius*1.95,radius*.55); g.add(pupil);
+      const wing=new THREE.Mesh(new THREE.SphereGeometry(radius*.22,10,8),bodyMat); wing.scale.set(.65,1.5,.55); wing.position.set(side*radius*.83,radius+1,0); g.add(wing);
+      const foot=new THREE.Mesh(new THREE.SphereGeometry(radius*.22,10,8),mat("#ffb544")); foot.scale.set(1.25,.4,1.5); foot.position.set(side*radius*.32,2,3); g.add(foot);
     }
-    if(type==="boss") {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(radius+8,3,8,32),mat("#d9b8ff"));
-      ring.rotation.x=Math.PI/2; ring.position.y=4; g.add(ring);
-      const spikes = new THREE.Mesh(new THREE.ConeGeometry(radius*0.2,radius*0.65,6),mat("#c9e6ff"));
-      for(let i=0;i<6;i++){const s=spikes.clone();s.position.set(Math.cos(i*Math.PI/3)*radius*0.75,radius*1.85,Math.sin(i*Math.PI/3)*radius*0.75);g.add(s);}
-    }
+    const beak=new THREE.Mesh(new THREE.ConeGeometry(radius*.15,radius*.35,7),mat("#ffb544")); beak.rotation.x=Math.PI/2; beak.position.set(0,radius*1.82,radius*.68); g.add(beak);
+    if(["armored","heavy","elite","boss"].includes(type)){const armor=new THREE.Mesh(new THREE.SphereGeometry(radius*.88,12,10),mat(type==="boss"?"#c6a5ff":"#8e9da8",.35));armor.scale.set(1,.45,.8);armor.position.set(0,radius*1.3,-radius*.1);g.add(armor);}
+    if(["ice","crystal","boss","phantom"].includes(type)){for(let i=0;i<(type==="boss"?8:3);i++){const n=type==="boss"?8:3,ang=i/n*Math.PI*2;const spike=new THREE.Mesh(new THREE.ConeGeometry(radius*.13,radius*(type==="boss"?.9:.5),5),mat(type==="boss"?"#a9eaff":"#d8f8ff",.25));spike.position.set(Math.cos(ang)*radius*.7,radius*2.05,Math.sin(ang)*radius*.5);g.add(spike);}}
+    const bar=new THREE.Group(), bg=new THREE.Mesh(new THREE.PlaneGeometry(radius*2.5,4),mat("#18232c")), fill=new THREE.Mesh(new THREE.PlaneGeometry(radius*2.35,2.3),mat("#5ee27b"));
+    bar.add(bg);fill.position.z=.2;fill.position.y=.1;bar.add(fill);bar.position.set(0,radius*2.65,0);bar.userData={fill:fill,baseWidth:radius*2.35};g.add(bar);g.userData.hpBar=bar;
+    if(type==="boss"){const ring=new THREE.Mesh(new THREE.TorusGeometry(radius+13,2.8,8,40),mat("#d9b8ff",.25));ring.rotation.x=Math.PI/2;ring.position.y=3;g.add(ring);const aura=new THREE.Mesh(new THREE.TorusGeometry(radius+20,1.5,6,48),mat("#66d9ff",.2));aura.rotation.x=Math.PI/2;aura.position.y=5;g.add(aura);const warn=new THREE.Mesh(new THREE.RingGeometry(radius+4,radius+12,48),new THREE.MeshBasicMaterial({color:"#ff476f",transparent:true,opacity:.7,side:THREE.DoubleSide}));warn.rotation.x=-Math.PI/2;warn.position.y=1;warn.visible=false;g.add(warn);g.userData.bossRing=ring;g.userData.bossAura=aura;g.userData.warningRing=warn;const light=new THREE.PointLight("#8c5cff",2.5,radius*12);light.position.y=radius*1.7;g.add(light);}
     return g;
   }
   function getMesh(id, create) {
@@ -101,12 +105,12 @@
     syncList(players,"p:",p=>makePenguin(p.skin,!p.alive),(m,p)=>{
       m.position.set(p.x,0,p.y); m.rotation.y=-(p.angle||0); m.visible=true;
       const body=m.children[0]; if(body) body.material.color.set(p.alive?(skinColors[p.skin]||skinColors.classic):"#737e83");
-      m.scale.setScalar(p.alive?1:0.85);
+      m.scale.setScalar(p.alive?1:0.85); const bar=m.userData.hpBar; if(bar&&bar.userData.fill){const ratio=Math.max(0,Math.min(1,(p.hp||0)/(p.maxHp||100)));bar.userData.fill.scale.x=ratio;bar.userData.fill.position.x=-(bar.userData.baseWidth*(1-ratio))/2;bar.userData.fill.material.color.set(ratio<.3?"#ff4e5e":ratio<.6?"#ffd05e":"#5ee27b");bar.quaternion.copy(camera3d.quaternion);}
     });
     syncList(enemies,"e:",e=>makeEnemy(e.type,e.r||16),(m,e)=>{
-      m.position.set(e.x,0,e.y); m.visible=e.hp>0;
-      const s=e.type==="boss"?1.35:1; m.scale.setScalar(s);
-      m.rotation.y += 0.01;
+      m.position.set(e.x,0,e.y);m.visible=e.hp>0;m.rotation.y=Math.sin(performance.now()/430+e.x)*.16;
+      const bar=m.userData.hpBar;if(bar&&bar.userData.fill){const ratio=Math.max(0,Math.min(1,(e.hp||0)/(e.maxHp||1)));bar.userData.fill.scale.x=ratio;bar.userData.fill.position.x=-(bar.userData.baseWidth*(1-ratio))/2;bar.userData.fill.material.color.set(ratio<.3?"#ff4e5e":ratio<.6?"#ffd05e":"#5ee27b");bar.quaternion.copy(camera3d.quaternion);}
+      if(e.type==="boss"){const t=performance.now()/1000;if(m.userData.bossRing){m.userData.bossRing.rotation.z=t*.7;m.userData.bossRing.scale.setScalar(1+Math.sin(t*3)*.08);}if(m.userData.bossAura){m.userData.bossAura.rotation.z=-t*1.1;m.userData.bossAura.scale.setScalar(1+Math.sin(t*4)*.12);}if(m.userData.warningRing){m.userData.warningRing.visible=(e.warning||0)>0;m.userData.warningRing.scale.setScalar(1+Math.sin(t*16)*.16);}}
     });
     syncList(world.snowballs||[],"s:",d=>{
       const m=new THREE.Mesh(new THREE.IcosahedronGeometry(Math.max(4,d.r||8),1),mats.snow);m.castShadow=true;return m;
