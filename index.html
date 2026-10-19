@@ -48,6 +48,7 @@
         <canvas id="game" width="960" height="600" aria-label="Spielfeld"></canvas>
         <canvas id="game3d" width="960" height="600" aria-label="3D-Spielfeld"></canvas>
         <div id="notice" class="game-message" role="status" aria-live="polite"></div><div id="pauseOverlay" class="pause-overlay hidden" role="dialog" aria-modal="true"><div class="pause-card"><p class="eyebrow">SPIEL PAUSIERT</p><h2>Kurze Pause</h2><p>Dein Spiel steht still, bis du fortsetzt.</p><button id="resumeBtn" class="primary">Weiter spielen</button><button id="pauseLeaveBtn" class="secondary">Spiel verlassen</button></div></div>
+        <div id="playerHealthHud" class="player-health-hud"><strong>DEIN LEBEN</strong><span id="playerHealthText">100 / 100 HP</span><div class="player-health-track"><span id="playerHealthFill"></span></div></div>
         <div id="bossBar" class="boss-bar hidden"><strong id="bossBarLabel">EISRIESE</strong><div class="boss-bar-track"><span id="bossBarFill"></span></div></div>
         <div class="progress-panel"><span id="upgradeProgressText">50 Schneebälle bis Upgrade</span><div class="progress-track"><span id="upgradeProgress"></span></div></div>
         <div class="canvas-help">WASD bewegen · Maustaste halten zum Zielen und Werfen · E Pause · Q Wand · H Iglu</div>
