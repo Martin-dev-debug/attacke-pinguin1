@@ -106,6 +106,11 @@ function updateUI(now) {
   const progress = Math.max(0, Math.min(100, (collected - (nextAt - needed)) / needed * 100));
   if (upgradeProgress) upgradeProgress.style.width = progress + "%";
   if (upgradeProgressText) upgradeProgressText.textContent = Math.max(0, nextAt - collected) + " Schneebälle bis Level " + (level + 1);
+  const healthFill=document.getElementById("playerHealthFill"), healthText=document.getElementById("playerHealthText");
+  if(healthFill) healthFill.style.width=(player?Math.max(0,Math.min(100,(player.hp||0)/(player.maxHp||100)*100)):0)+"%";
+  if(healthText) healthText.textContent=player?Math.ceil(player.hp||0)+" / "+(player.maxHp||100)+" HP":"0 / 100 HP";
+  const healthHud=document.getElementById("playerHealthHud");
+  if(healthHud) healthHud.classList.toggle("low-health",!!player&&player.hp/(player.maxHp||100)<0.3);
   const boss = world.enemies.find(enemy => enemy.type === "boss");
   if (bossBar) bossBar.classList.toggle("hidden", !boss);
   if (bossBarFill) bossBarFill.style.width = boss ? Math.max(0, Math.min(100, boss.hp / boss.maxHp * 100)) + "%" : "0%";
