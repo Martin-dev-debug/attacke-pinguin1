@@ -63,6 +63,11 @@
       const foot = new THREE.Mesh(new THREE.SphereGeometry(4,10,8), mats.beak);
       foot.scale.set(1.3,0.45,1.7); foot.position.set(side*6,3,3); g.add(foot);
     }
+    const bar=new THREE.Group();
+    const bg=new THREE.Mesh(new THREE.PlaneGeometry(46,5),mat("#18232c"));
+    const fill=new THREE.Mesh(new THREE.PlaneGeometry(43,3),mat("#5ee27b"));
+    bar.add(bg);fill.position.z=0.2;fill.position.y=0.1;bar.add(fill);
+    bar.position.set(0,56,0);bar.userData={fill:fill,baseWidth:43};g.add(bar);g.userData.hpBar=bar;
     return g;
   }
   function makeEnemy(type="normal", radius=16) {
